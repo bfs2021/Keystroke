@@ -213,4 +213,70 @@ describe('Lexer', () => {
     });
   });
 
+  // Regression for #21: block markers only count at the start of a line.
+  describe('line-start block markers', () => {
+    function types(input: string): Array<[TokenType, string]> {
+      const lexer = new Lexer(input);
+      const out: Array<[TokenType, string]> = [];
+      for (let t = lexer.nextToken(); t.type !== TokenType.EOF; t = lexer.nextToken()) {
+        out.push([t.type, t.literal]);
+      }
+      return out;
+    }
+
+    it.each([
+      ['C# is great', '#'],
+      ['a > b', '>'],
+      ['well-known term', '-'],
+      ['x - y', '-'],
+      ['a --- b', '---'],
+      ['x - [ ] y', '-'],
+      ['a * b', '*'],
+    ])('%j lexes the mid-line marker as TEXT', (input, marker) => {
+      const tokens = types(input);
+      expect(tokens).toContainEqual([TokenType.TEXT, marker]);
+      const blockTypes = [
+        TokenType.HEADER1, TokenType.BLOCKQUOTE, TokenType.LIST_ITEM, TokenType.UNORDERED_LIST,
+        TokenType.HORIZONTAL_RULE, TokenType.CHECKLIST, TokenType.CHECKLIST_CHECKED,
+      ];
+      expect(tokens.filter(([type]) => blockTypes.includes(type))).toEqual([]);
+    });
+
+    it('keeps the x of a mid-line `- [x]` as text', () => {
+      const tokens = types('a - [x] b');
+      expect(tokens).toContainEqual([TokenType.TEXT, 'x']);
+      expect(tokens.map(([type]) => type)).not.toContain(TokenType.ILLEGAL);
+    });
+
+    it('lexes a rule of more than three dashes as one token', () => {
+      expect(types('-----')).toEqual([[TokenType.HORIZONTAL_RULE, '---']]);
+    });
+
+    it('needs a space or end of line after # for a header', () => {
+      expect(types('#tag')[0]).toEqual([TokenType.TEXT, '#']);
+      expect(types('####### x')[0]).toEqual([TokenType.TEXT, '#######']);
+      expect(types('#')[0]).toEqual([TokenType.HEADER1, '#']);
+      expect(types('## x')[0]).toEqual([TokenType.HEADER2, '##']);
+    });
+
+    it('recognizes markers after indentation and after a newline', () => {
+      expect(types('  # H')).toContainEqual([TokenType.HEADER1, '#']);
+      expect(types('\t> q')).toContainEqual([TokenType.BLOCKQUOTE, '>']);
+      expect(types('a\n- b').map(([type]) => type)).toContain(TokenType.LIST_ITEM);
+      expect(types('a\n* b')).toContainEqual([TokenType.UNORDERED_LIST, '*']);
+      expect(types('a\n---')).toContainEqual([TokenType.HORIZONTAL_RULE, '---']);
+      expect(types('a\n- [x] b')).toContainEqual([TokenType.CHECKLIST_CHECKED, '- [x]']);
+    });
+
+    it('keeps inline emphasis working mid-line', () => {
+      expect(types('a *i* **b** ~~s~~').map(([type]) => type)).toEqual([
+        TokenType.TEXT, TokenType.SPACE,
+        TokenType.ITALIC, TokenType.TEXT, TokenType.ITALIC, TokenType.SPACE,
+        TokenType.BOLD, TokenType.TEXT, TokenType.BOLD, TokenType.SPACE,
+        TokenType.STRIKETHROUGH, TokenType.TEXT, TokenType.STRIKETHROUGH,
+      ]);
+      // The closing `*` before a space is emphasis, not a list marker.
+      expect(types('*a* b')[2]).toEqual([TokenType.ITALIC, '*']);
+    });
+  });
 });
