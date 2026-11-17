@@ -69,7 +69,7 @@ describe('Renderer', () => {
             const bold = new BoldNode(token, 'Bold text');
             bold.children.push(new TextNode(new Token(TokenType.TEXT, 'Bold text'), 'Bold text'));
 
-            expect(renderer.render(bold)).toBe('<b>Bold text</b>\n');
+            expect(renderer.render(bold)).toBe('<b>Bold text</b>');
         });
 
         it('should render italic text', () => {
@@ -77,7 +77,7 @@ describe('Renderer', () => {
             const italic = new ItalicNode(token, 'Italic text');
             italic.children.push(new TextNode(new Token(TokenType.TEXT, 'Italic text'), 'Italic text'));
 
-            expect(renderer.render(italic)).toBe('<i>Italic text</i>\n');
+            expect(renderer.render(italic)).toBe('<i>Italic text</i>');
         });
     });
 
@@ -86,7 +86,7 @@ describe('Renderer', () => {
             const token = new Token(TokenType.LINK_TEXT_START, '[');
             const link = new LinkNode(token, 'Example', 'https://example.com');
 
-            expect(renderer.render(link)).toBe('<a href="https://example.com">Example</a>\n');
+            expect(renderer.render(link)).toBe('<a href="https://example.com">Example</a>');
         });
     });
 
@@ -96,7 +96,7 @@ describe('Renderer', () => {
             const code = new InlineCodeNode(token, 'console.log()');
             code.children.push(new TextNode(new Token(TokenType.TEXT, 'console.log()'), 'console.log()'));
 
-            expect(renderer.render(code)).toBe('<code>console.log()</code>\n');
+            expect(renderer.render(code)).toBe('<code>console.log()</code>');
         });
     });
 
@@ -106,7 +106,7 @@ describe('Renderer', () => {
             const math = new MathNode(token, '1+2=3');
             math.children.push(new TextNode(new Token(TokenType.TEXT, '1+2=3'), '1+2=3'));
 
-            expect(renderer.render(math)).toBe('<span class="math">1+2=3</span>\n');
+            expect(renderer.render(math)).toBe('<span class="math">1+2=3</span>');
         });
 
         it('should render superscript', () => {

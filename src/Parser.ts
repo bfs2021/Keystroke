@@ -616,12 +616,11 @@ export class Parser {
             this.nextToken(); // Ensure token advancement
         }
 
-        if (this.currentTokenIs(TokenType.ITALIC)) {
-            this.nextToken(); // Consume the closing **
+        if (this.currentTokenIs(TokenType.INLINE_CODE)) {
+            this.nextToken(); // Move past closing `
         } else {
-            this.addError("Unmatched _ for italic text");
+            this.addError("Unmatched ` for inline code");
         }
-        this.nextToken();
 
         return code;
     }
@@ -738,6 +737,9 @@ export class Parser {
 
         while (this.currentToken.type !== TokenType.EOF) {
             let node: MarkdownNode | null = null;
+            // Inline sub-parsers leave currentToken on the first token after
+            // the construct, so the loop must not advance again for them.
+            let consumedOwnTokens = false;
 
             switch (this.currentToken.type) {
                 case TokenType.HEADER1:
@@ -783,27 +785,35 @@ export class Parser {
                     break;
                 case TokenType.BOLD:
                     node = this.parseBold();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.ITALIC:
                     node = this.parseItalic();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.STRIKETHROUGH:
                     node = this.parseStrikethrough();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.LEFT_BRACKET:
                     node = this.parseLink();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.INLINE_CODE:
                     node = this.parseCode();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.MATH:
                     node = this.parseMath();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.SUPERSCRIPT:
                     node = this.parseSuperscript();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.SUBSCRIPT:
                     node = this.parseSubscript();
+                    consumedOwnTokens = true;
                     break;
                 default:
                     node = new IllegalNode(this.currentToken);
@@ -814,7 +824,9 @@ export class Parser {
                 documentNode.children.push(node);
             }
 
-            this.nextToken();
+            if (!consumedOwnTokens) {
+                this.nextToken();
+            }
         }
 
         return documentNode;

@@ -174,4 +174,48 @@ describe('Parser', () => {
             expect(hasMathNodes).toBe(true);
         });
     });
+
+    // Regression for #20: parse() advanced again after inline sub-parsers had
+    // already moved past their closing token, dropping the next token.
+    describe('Tokens after inline constructs', () => {
+        const cases: Array<[string, string, string]> = [
+            ['bold', '**bold**,', ','],
+            ['italic (*)', '*it*.', '.'],
+            ['italic (_)', '_it_!', '!'],
+            ['strikethrough', '~~gone~~;', ';'],
+            ['link', '[link](http://x.com).', '.'],
+            ['inline code', '`code`:', ':'],
+            ['math', '$x$?', '?'],
+        ];
+
+        it.each(cases)('keeps the token right after %s', (_name, input, after) => {
+            const doc = parse(input);
+            expect(doc.children).toHaveLength(2);
+            expect(doc.children[1].type).toBe(TokenType.TEXT);
+            expect(doc.children[1].value).toBe(after);
+        });
+
+        it('keeps the newline after unclosed inline code', () => {
+            const doc = parse('`code\nnext');
+            expect(doc.children.map(c => c.type)).toEqual([
+                TokenType.INLINE_CODE, TokenType.NEWLINE, TokenType.TEXT,
+            ]);
+        });
+
+        it('keeps the token right after superscript', () => {
+            const doc = parse('x^2 a');
+            expect(doc.children.map(c => c.type)).toEqual([
+                TokenType.TEXT, TokenType.SUPERSCRIPT, TokenType.SPACE, TokenType.TEXT,
+            ]);
+            expect(doc.children[3].value).toBe('a');
+        });
+
+        it('keeps the token right after subscript', () => {
+            const doc = parse('y~1 a');
+            expect(doc.children.map(c => c.type)).toEqual([
+                TokenType.TEXT, TokenType.SUBSCRIPT, TokenType.SPACE, TokenType.TEXT,
+            ]);
+            expect(doc.children[3].value).toBe('a');
+        });
+    });
 });
