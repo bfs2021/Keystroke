@@ -267,7 +267,7 @@ describe('Parser', () => {
         function parseWithErrors(input: string): [DocumentNode, string[]] {
             const parser = new Parser(new Lexer(input));
             const doc = parser.parse();
-            return [doc, (parser as unknown as { errors: string[] }).errors];
+            return [doc, parser.getErrors()];
         }
 
         it('parses inline code without errors', () => {
@@ -324,6 +324,51 @@ describe('Parser', () => {
             const checklist = list.items[0];
             expect(checklist).toBeInstanceOf(ChecklistNode);
             expect(checklist.children.some(child => child instanceof MathNode)).toBe(true);
+        });
+    });
+
+    describe('Errors', () => {
+        function errorsFor(input: string): string[] {
+            const parser = new Parser(new Lexer(input));
+            parser.parse();
+            return parser.getErrors();
+        }
+
+        it('reports no errors for a horizontal rule', () => {
+            expect(errorsFor('---\nafter rule')).toEqual([]);
+        });
+
+        it('reports no errors for a representative valid document', () => {
+            const doc = [
+                '# Title',
+                '## Subtitle',
+                '',
+                'Some **bold**, _italic_ and ~~struck~~ text with a [link](https://example.com).',
+                'Use `inline_code` here and math $x^2 + y_1$ inline.',
+                '',
+                '```ts',
+                'const a = 1;',
+                '```',
+                '',
+                '- one',
+                '- two',
+                '',
+                '1. first',
+                '2. second',
+                '',
+                '- [ ] todo',
+                '- [x] done',
+                '',
+                '> quoted',
+                '',
+                '---',
+                'after rule',
+            ].join('\n');
+            expect(errorsFor(doc)).toEqual([]);
+        });
+
+        it('still reports genuinely unmatched bold', () => {
+            expect(errorsFor('**never closed')).toEqual(['Unmatched ** for bold text']);
         });
     });
 });
