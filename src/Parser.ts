@@ -383,8 +383,9 @@ export class Parser {
     }
 
     // Link text and URL stop at the end of the line, so an unclosed `[`
-    // can't swallow the lines (or list items) after it.
-    private parseLink(): LinkNode {
+    // can't swallow the lines (or list items) after it. Brackets that aren't
+    // `[text](url)` (no `]`, or no `(` right after it) stay literal text.
+    private parseLink(): LinkNode | TextNode {
         let text = '';
         const textToken = this.currentToken;
         this.nextToken(); // Move past [
@@ -394,24 +395,27 @@ export class Parser {
             this.nextToken();
         }
 
-        if (this.currentTokenIs(TokenType.RIGHT_BRACKET)) {
-            this.nextToken(); // Move past ]
+        if (!this.currentTokenIs(TokenType.RIGHT_BRACKET)) {
+            return new TextNode(textToken, '[' + text);
+        }
+        this.nextToken(); // Move past ]
+
+        if (!this.currentTokenIs(TokenType.LEFT_PARENTHESIS)) {
+            return new TextNode(textToken, '[' + text + ']');
         }
 
         let url = '';
-        if (this.currentTokenIs(TokenType.LEFT_PARENTHESIS)) {
-            this.nextToken(); // Move past (
-            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
-                url += this.currentToken.literal;
-                this.nextToken();
-            }
-            if (this.currentTokenIs(TokenType.RIGHT_PARENTHESIS)) {
-                this.nextToken(); // Move past )
-            }
+        this.nextToken(); // Move past (
+        while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF) &&
+            !this.currentTokenIs(TokenType.NEWLINE)) {
+            url += this.currentToken.literal;
+            this.nextToken();
+        }
+        if (this.currentTokenIs(TokenType.RIGHT_PARENTHESIS)) {
+            this.nextToken(); // Move past )
         }
 
-        const link = new LinkNode(textToken, text, url);
-        return link;
+        return new LinkNode(textToken, text, url);
     }
 
     private parseWhitespace(): WhitespaceNode {

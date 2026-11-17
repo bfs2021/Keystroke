@@ -77,7 +77,7 @@ describe('Markdown Interpreter', () => {
 
         it('keeps later items after an unclosed [ in an item', () => {
             expect(processMarkdown('- see [note\n- next')).toBe(
-                '<ul><li>see <a href="">note</a></li>\n<li>next</li>\n</ul>\n'
+                '<ul><li>see [note</li>\n<li>next</li>\n</ul>\n'
             );
         });
 
@@ -134,6 +134,34 @@ describe('Markdown Interpreter', () => {
             const input = '[Example](https://example.com)';
             const expected = '<a href="https://example.com">Example</a>';
             expect(processMarkdown(input)).toBe(expected);
+        });
+
+        // Regression for #26: brackets without an immediate `(url)` are text.
+        it.each([
+            ['[note] text', '[note] text'],
+            ['box [x] here', 'box [x] here'],
+            ['[a]b', '[a]b'],
+            ['x [a]*b*', 'x [a]<i>b</i>'],
+            ['[abc', '[abc'],
+            ['[abc\nnext', '[abc<br>\nnext'],
+            ['see [t](u) now', 'see <a href="u">t</a> now'],
+        ])('%j renders brackets correctly', (input, expected) => {
+            expect(processMarkdown(input)).toBe(expected);
+        });
+
+        it('does not link `[a] (b)` (space before the paren)', () => {
+            // Paragraph-level parens are dropped separately (#33), so pin the
+            // full output inside a list item, where they survive.
+            expect(processMarkdown('- [a] (b)')).toBe('<ul><li>[a] (b)</li>\n</ul>\n');
+            const html = processMarkdown('[a] (b)');
+            expect(html.startsWith('[a] ')).toBe(true);
+            expect(html).not.toContain('<a');
+        });
+
+        it('keeps bracket text literal inside list items', () => {
+            expect(processMarkdown('- item [x] y\n- [abc\n- [t](u)')).toBe(
+                '<ul><li>item [x] y</li>\n<li>[abc</li>\n<li><a href="u">t</a></li>\n</ul>\n'
+            );
         });
     });
 
@@ -238,7 +266,7 @@ describe('Markdown Interpreter', () => {
 
         it('should not let unterminated inline code or links swallow the next line', () => {
             expect(processMarkdown('# a `b\nnext')).toBe('<h1>a <code>b</code></h1>\nnext');
-            expect(processMarkdown('**a [b\nnext')).toBe('<b>a <a href="">b</a></b><br>\nnext');
+            expect(processMarkdown('**a [b\nnext')).toBe('<b>a [b</b><br>\nnext');
         });
     });
 
