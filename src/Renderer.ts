@@ -1,4 +1,4 @@
-import { MarkdownNode, LinkNode, ChecklistCheckedNode, CodeBlockNode } from './Ast';
+import { MarkdownNode, LinkNode, CodeBlockNode, MathNode, SuperscriptNode, SubscriptNode } from './Ast';
 import { TokenType } from './Token';
 
 function escapeHtml(text: string): string {
@@ -76,18 +76,18 @@ export class Renderer {
             case TokenType.TAB:
                 return "&emsp;";
             case TokenType.MATH:
-                const mathNode = node as any; // MathNode
-                if (mathNode.text && mathNode.text.trim()) {
-                    return `<span class="math">${mathNode.text}</span>`;
-                } else {
-                    return `<span class="math">${this.renderChildren(node).trim()}</span>`;
+                if (node instanceof MathNode && node.text && node.text.trim()) {
+                    return `<span class="math">${node.text}</span>`;
                 }
-            case TokenType.SUPERSCRIPT:
-                const superNode = node as any; // SuperscriptNode
-                return `<sup>${superNode.text || this.renderChildren(node)}</sup>`;
-            case TokenType.SUBSCRIPT:
-                const subNode = node as any; // SubscriptNode
-                return `<sub>${subNode.text || this.renderChildren(node)}</sub>`;
+                return `<span class="math">${this.renderChildren(node).trim()}</span>`;
+            case TokenType.SUPERSCRIPT: {
+                const text = node instanceof SuperscriptNode ? node.text : '';
+                return `<sup>${text || this.renderChildren(node)}</sup>`;
+            }
+            case TokenType.SUBSCRIPT: {
+                const text = node instanceof SubscriptNode ? node.text : '';
+                return `<sub>${text || this.renderChildren(node)}</sub>`;
+            }
             default:
                 return `<span>${node.value || ""}</span>\n`;
         }

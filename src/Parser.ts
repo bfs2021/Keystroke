@@ -9,7 +9,6 @@ import {
     Header4Node,
     Header5Node,
     Header6Node,
-    ParagraphNode,
     ListNode,
     ListItemNode,
     ListRelatedNode,
@@ -24,16 +23,13 @@ import {
     InlineCodeNode,
     CodeBlockNode,
     IllegalNode,
-    EOFNode,
     NewlineNode,
     DocumentNode,
     SpaceNode,
-    WhitespaceNode,
     TabNode,
     MathNode,
     SuperscriptNode,
     SubscriptNode,
-    ParenthesisNode,
     TextNode
 } from "./Ast";
 
@@ -72,36 +68,16 @@ export class Parser {
         this.peekNextToken = this.lexer.nextToken();
     }
 
-    private peekTokenIs(t: TokenType): boolean {
-        return this.peekToken.type === t;
-    }
-
-    private peekNextTokenIs(t: TokenType): boolean {
-        return this.peekNextToken.type === t;
-    }
-
     private currentTokenIs(t: TokenType): boolean {
         return this.currentToken.type === t;
     }
 
-    private expectPeek(t: TokenType): void {
-        if (this.peekTokenIs(t)) {
-            this.nextToken();
-        } else {
-            this.addError(`expected next token to be ${t}, got ${this.peekToken.type} instead`);
-        }
-    }
     private isSpaceOrTab(token: Token): boolean {
         return token.type === TokenType.SPACE || token.type === TokenType.TAB;
     }
 
     private addError(msg: string): void {
         this.errors.push(msg);
-    }
-    private peekError(t: TokenType): void {
-        if (this.peekTokenIs(t)) {
-            this.addError(`expected next token to be ${t}, got ${this.peekToken.type} instead`);
-        }
     }
 
     private parseHeader(): HeaderNode {
@@ -245,46 +221,6 @@ export class Parser {
         }
     }
 
-    // private parseInlineContent(): MarkdownNode[] {
-    //     const children: MarkdownNode[] = [];
-
-    //     while (this.isInlineToken(this.currentToken.type)) {
-    //         switch (this.currentToken.type) {
-    //             case TokenType.BOLD:
-    //                 children.push(this.parseBold());
-    //                 break;
-    //             case TokenType.ITALIC:
-    //                 children.push(this.parseItalic());
-    //                 break;
-    //             case TokenType.STRIKETHROUGH:
-    //                 children.push(this.parseStrikethrough());
-    //                 break;
-    //             case TokenType.INLINE_CODE:
-    //                 children.push(this.parseCode());
-    //                 break;
-    //             default:
-    //                 children.push(this.parseText());
-    //                 break;
-    //         }
-    //         this.nextToken(); // Ensure token advancement
-    //     }
-
-    //     return children;
-    // }
-
-    private isInlineToken(type: TokenType): boolean {
-        return [
-            TokenType.BOLD,
-            TokenType.ITALIC,
-            TokenType.STRIKETHROUGH,
-            TokenType.TEXT,
-            TokenType.INLINE_CODE,
-            TokenType.SPACE,
-            TokenType.TAB,
-            TokenType.NEWLINE,
-        ].includes(type);
-    }
-
     private parseText(): TextNode {
         const text = new TextNode(this.currentToken, this.currentToken.literal);
         return text;
@@ -421,37 +357,6 @@ export class Parser {
         return new LinkNode(textToken, text, url);
     }
 
-    private parseWhitespace(): WhitespaceNode {
-        if (this.currentToken.type === TokenType.SPACE) {
-            return new SpaceNode(this.currentToken);
-        } else if (this.currentToken.type === TokenType.TAB) {
-            return new TabNode(this.currentToken);
-        } else if (this.currentToken.type === TokenType.NEWLINE) {
-            return new NewlineNode(this.currentToken);
-        }
-        return new SpaceNode(this.currentToken);
-    }
-    private parseSpace(): SpaceNode {
-        this.expectPeek(TokenType.SPACE);
-        const space = new SpaceNode(this.currentToken);
-        this.nextToken();
-        return space;
-    }
-
-    private parseTab(): TabNode {
-        this.expectPeek(TokenType.TAB);
-        const tab = new TabNode(this.currentToken);
-        this.nextToken();
-        return tab;
-    }
-
-    private parseNewline(): NewlineNode {
-        this.expectPeek(TokenType.NEWLINE);
-        const newline = new NewlineNode(this.currentToken);
-        this.nextToken();
-        return newline;
-    }
-
     private parseBold(): BoldNode {
         const bold = new BoldNode(this.currentToken, '');
         this.nextToken(); // Move past opening **
@@ -510,19 +415,6 @@ export class Parser {
         }
 
         return strikethrough;
-    }
-    private parseNested(): MarkdownNode { //probalby needs to be recursive or something
-        switch (this.currentToken.type){
-            case TokenType.BOLD:
-                return this.parseBold();
-            case TokenType.ITALIC:
-                return this.parseItalic();
-            case TokenType.STRIKETHROUGH:
-                return this.parseStrikethrough();
-            default:
-                return this.parseText();
-        }
-
     }
     private parseMath(): MathNode {
         const math = new MathNode(this.currentToken, '');
@@ -647,34 +539,6 @@ export class Parser {
         const subscript = new SubscriptNode(this.currentToken, subscriptText);
         return subscript;
     }
-    private parseParenthesis(): ParenthesisNode {
-        this.expectPeek(TokenType.LEFT_PARENTHESIS);
-        const parenthesis = new ParenthesisNode(this.currentToken, '');
-        this.nextToken();
-
-        while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
-            switch (this.currentToken.type) {
-                case TokenType.SUPERSCRIPT:
-                    parenthesis.children.push(this.parseSuperscript());
-                    break;
-                case TokenType.SUBSCRIPT:
-                    parenthesis.children.push(this.parseSubscript());
-                    break;
-                case TokenType.TEXT:
-                    parenthesis.children.push(this.parseText());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
-            }
-        }
-
-        if (this.currentTokenIs(TokenType.RIGHT_PARENTHESIS)) {
-            this.nextToken();
-        }
-
-        return parenthesis;
-    }
 
     private parseCode(): InlineCodeNode {
         const code = new InlineCodeNode(this.currentToken, '');
@@ -701,37 +565,6 @@ export class Parser {
     private parseCodeBlock(): CodeBlockNode {
         return new CodeBlockNode(this.currentToken, this.currentToken.literal, this.currentToken.language);
     }
-
-
-    private parseInlineContent(): MarkdownNode[] {
-        const children: MarkdownNode[] = [];
-
-        while (this.isInlineToken(this.currentToken.type)) {
-            switch (this.currentToken.type) {
-                case TokenType.BOLD:
-                    children.push(this.parseBold());
-                    break;
-                case TokenType.ITALIC:
-                    children.push(this.parseItalic());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    children.push(this.parseStrikethrough());
-                    break;
-                case TokenType.SPACE:
-                case TokenType.TAB:
-                case TokenType.NEWLINE:
-                    children.push(this.parseWhitespace());
-                    break;
-                default:
-                    children.push(this.parseText());
-                    break;
-            }
-            this.nextToken(); // Ensure token advancement
-        }
-
-        return children;
-    }
-
 
     public parse(): DocumentNode {
         const documentNode = new DocumentNode();

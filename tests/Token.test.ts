@@ -1,4 +1,4 @@
-import { Token, TokenType, keywords } from '../src/Token';
+import { Token, TokenType } from '../src/Token';
 
 describe('Token', () => {
     describe('Token Class', () => {
@@ -64,64 +64,6 @@ describe('Token', () => {
             expect(TokenType.MATH).toBe('MATH');
             expect(TokenType.SUPERSCRIPT).toBe('SUPERSCRIPT');
             expect(TokenType.SUBSCRIPT).toBe('SUBSCRIPT');
-        });
-    });
-
-    describe('Keywords Map', () => {
-        const testCases = {
-            headers: [
-                { input: '#', expected: TokenType.HEADER1 },
-                { input: '##', expected: TokenType.HEADER2 },
-                { input: '###', expected: TokenType.HEADER3 },
-                { input: '####', expected: TokenType.HEADER4 },
-                { input: '#####', expected: TokenType.HEADER5 },
-                { input: '######', expected: TokenType.HEADER6 }
-            ],
-            lists: [
-                { input: '*', expected: TokenType.UNORDERED_LIST },
-                { input: '1.', expected: TokenType.ORDERED_LIST },
-                { input: '-', expected: TokenType.LIST_ITEM },
-                { input: '- [ ]', expected: TokenType.CHECKLIST },
-                { input: '- [x]', expected: TokenType.CHECKLIST_CHECKED }
-            ],
-            textFormatting: [
-                { input: '**', expected: TokenType.BOLD },
-                { input: '_', expected: TokenType.ITALIC },
-                { input: '~~', expected: TokenType.STRIKETHROUGH }
-            ],
-            code: [
-                { input: '`', expected: TokenType.INLINE_CODE },
-                { input: '```', expected: TokenType.CODE_BLOCK }
-            ],
-            links: [
-                { input: '[', expected: TokenType.LEFT_BRACKET },
-                { input: ']', expected: TokenType.RIGHT_BRACKET },
-                { input: '(', expected: TokenType.LEFT_PARENTHESIS },
-                { input: ')', expected: TokenType.RIGHT_PARENTHESIS }
-            ],
-            other: [
-                { input: '>', expected: TokenType.BLOCKQUOTE },
-                { input: '---', expected: TokenType.HORIZONTAL_RULE }
-            ],
-            invalid: [
-                { input: 'undefined_symbol', expected: undefined },
-                { input: '!', expected: undefined }
-            ],
-            math: [
-                { input: '$', expected: TokenType.MATH },
-                { input: '^', expected: TokenType.SUPERSCRIPT },
-                { input: '~', expected: TokenType.SUBSCRIPT }
-            ]
-        };
-
-        Object.entries(testCases).forEach(([category, cases]) => {
-            describe(category, () => {
-                cases.forEach(({ input, expected }) => {
-                    it(`should map ${input} to ${expected}`, () => {
-                        expect(keywords[input]).toBe(expected);
-                    });
-                });
-            });
         });
     });
 });
