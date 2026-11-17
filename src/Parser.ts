@@ -541,6 +541,11 @@ export class Parser {
             }
         }
 
+        // Paired form (e.g. H~2~O, x^2^): consume the closing marker.
+        if (superscriptText !== '' && this.currentTokenIs(TokenType.SUPERSCRIPT)) {
+            this.nextToken();
+        }
+
         const superscript = new SuperscriptNode(this.currentToken, superscriptText);
         return superscript;
     }
@@ -570,6 +575,11 @@ export class Parser {
                 subscriptText += this.currentToken.literal;
                 this.nextToken();
             }
+        }
+
+        // Paired form (e.g. H~2~O, x^2^): consume the closing marker.
+        if (subscriptText !== '' && this.currentTokenIs(TokenType.SUBSCRIPT)) {
+            this.nextToken();
         }
 
         const subscript = new SubscriptNode(this.currentToken, subscriptText);

@@ -210,6 +210,23 @@ describe('Parser', () => {
             expect(doc.children[3].value).toBe('a');
         });
 
+        it('consumes the closing marker of paired subscript', () => {
+            const doc = parse('H~2~O');
+            expect(doc.children.map(c => c.type)).toEqual([
+                TokenType.TEXT, TokenType.SUBSCRIPT, TokenType.TEXT,
+            ]);
+            expect((doc.children[1] as SubscriptNode).text).toBe('2');
+            expect(doc.children[2].value).toBe('O');
+        });
+
+        it('consumes the closing marker of paired superscript', () => {
+            const doc = parse('x^2^ y');
+            expect(doc.children.map(c => c.type)).toEqual([
+                TokenType.TEXT, TokenType.SUPERSCRIPT, TokenType.SPACE, TokenType.TEXT,
+            ]);
+            expect((doc.children[1] as SuperscriptNode).text).toBe('2');
+        });
+
         it('keeps the token right after subscript', () => {
             const doc = parse('y~1 a');
             expect(doc.children.map(c => c.type)).toEqual([
