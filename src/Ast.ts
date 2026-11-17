@@ -78,7 +78,7 @@ export class ListNode extends MarkdownNode {
 	constructor(
 		token: Token,
 		public ordered: boolean,
-		public items: ListItemNode[] = []
+		public items: ListRelatedNode[] = []
 	) {
 		super(token.type as TokenType.UNORDERED_LIST | TokenType.ORDERED_LIST, token.literal);
 		this.children = items;

@@ -268,6 +268,21 @@ describe('Lexer', () => {
       expect(types('a\n- [x] b')).toContainEqual([TokenType.CHECKLIST_CHECKED, '- [x]']);
     });
 
+    it('lexes list markers for #23', () => {
+      expect(types('1. a')[0]).toEqual([TokenType.ORDERED_LIST, '1.']);
+      expect(types('a\n12. b')).toContainEqual([TokenType.ORDERED_LIST, '12.']);
+      expect(types('1.5')[0]).toEqual([TokenType.TEXT, '1.5']);
+      expect(types('a 1. b').map(([type]) => type)).not.toContain(TokenType.ORDERED_LIST);
+      // `-` needs a following space (or end of line) to be a list marker.
+      expect(types('-5')[0]).toEqual([TokenType.TEXT, '-']);
+      expect(types('-- x')[0]).toEqual([TokenType.TEXT, '--']);
+      expect(types('-')[0]).toEqual([TokenType.LIST_ITEM, '-']);
+      // A `[` that isn't a checkbox stays a token for the link parser.
+      expect(types('- [a](b)').slice(0, 3)).toEqual([
+        [TokenType.LIST_ITEM, '-'], [TokenType.SPACE, ' '], [TokenType.LEFT_BRACKET, '['],
+      ]);
+    });
+
     it('keeps inline emphasis working mid-line', () => {
       expect(types('a *i* **b** ~~s~~').map(([type]) => type)).toEqual([
         TokenType.TEXT, TokenType.SPACE,

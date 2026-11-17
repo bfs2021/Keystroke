@@ -65,16 +65,24 @@ describe('Parser', () => {
             expect(hasListNodes).toBe(true);
         });
 
-        it('should parse checklist items', () => {
-            const input = '- [ ] Todo\n- [x] Done';
-            const doc = parse(input);
-            expect(doc.children.length).toBeGreaterThan(0);
-            // Check that we have checklist-related nodes
-            const hasChecklistNodes = doc.children.some(child =>
-                child.type === TokenType.CHECKLIST ||
-                child.type === TokenType.CHECKLIST_CHECKED
-            );
-            expect(hasChecklistNodes).toBe(true);
+        it('should parse checklist items into one list', () => {
+            const doc = parse('- [ ] Todo\n- [x] Done');
+            expect(doc.children).toHaveLength(1);
+            const list = doc.children[0] as ListNode;
+            expect(list).toBeInstanceOf(ListNode);
+            expect(list.ordered).toBe(false);
+            expect(list.items).toHaveLength(2);
+            expect(list.items[0]).toBeInstanceOf(ChecklistNode);
+            expect(list.items[1]).toBeInstanceOf(ChecklistCheckedNode);
+        });
+
+        it('should parse an ordered list', () => {
+            const doc = parse('1. a\n2. b');
+            expect(doc.children).toHaveLength(1);
+            const list = doc.children[0] as ListNode;
+            expect(list.type).toBe(TokenType.ORDERED_LIST);
+            expect(list.ordered).toBe(true);
+            expect(list.items).toHaveLength(2);
         });
     });
 
@@ -311,7 +319,9 @@ describe('Parser', () => {
             expect(link.text).toBe('link');
             expect(link.url).toBe('url');
 
-            const checklist = parse('- [ ] solve $x^2$').children[0];
+            const list = parse('- [ ] solve $x^2$').children[0] as ListNode;
+            expect(list).toBeInstanceOf(ListNode);
+            const checklist = list.items[0];
             expect(checklist).toBeInstanceOf(ChecklistNode);
             expect(checklist.children.some(child => child instanceof MathNode)).toBe(true);
         });

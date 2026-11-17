@@ -63,8 +63,12 @@ export class Renderer {
                 return `<h5>${this.renderChildren(node).trim()}</h5>\n`;
             case TokenType.HEADER6:
                 return `<h6>${this.renderChildren(node).trim()}</h6>\n`;
-            case TokenType.ORDERED_LIST:
-                return `<ol>${this.renderChildren(node)}</ol>\n`;
+            case TokenType.ORDERED_LIST: {
+                // The list's value is its first marker, e.g. `3.`.
+                const start = parseInt(node.value, 10);
+                const attr = start === 1 || isNaN(start) ? '' : ` start="${start}"`;
+                return `<ol${attr}>${this.renderChildren(node)}</ol>\n`;
+            }
             case TokenType.NEWLINE:
                 return "<br>\n";
             case TokenType.SPACE:
