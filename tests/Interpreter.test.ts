@@ -109,12 +109,43 @@ describe('Markdown Interpreter', () => {
             ['x^2 outside math', 'x<sup>2</sup> outside math'],
             ['y~1 outside math', 'y<sub>1</sub> outside math'],
             ['H~2~O', 'H<sub>2</sub>O'],
-            ['**b**---tail', '<b>b</b><hr>\ntail'],
+            ['**b**\n---tail', '<b>b</b><br>\n<hr>\ntail'],
             ['---tail', '<hr>\ntail'],
             ['x^2^ y', 'x<sup>2</sup> y'],
             ['x^2^.', 'x<sup>2</sup>.'],
             ['$x^2^ + y~1~$', '<span class="math">x<sup>2</sup> + y<sub>1</sub></span>'],
         ])('%j preserves following text', (input, expected) => {
+            expect(processMarkdown(input)).toBe(expected);
+        });
+    });
+
+    // Regression for #21: block markers only count at the start of a line.
+    describe('Block markers only at line start', () => {
+        it.each([
+            ['C# is great', 'C# is great'],
+            ['a > b', 'a > b'],
+            ['well-known term', 'well-known term'],
+            ['x - y', 'x - y'],
+            ['a --- b', 'a --- b'],
+            ['a * b', 'a * b'],
+            ['#hashtag', '#hashtag'],
+            ['####### seven', '####### seven'],
+            ['**b** - *i* and ~~s~~', '<b>b</b> - <i>i</i> and <s>s</s>'],
+            ['*a* b', '<i>a</i> b'],
+        ])('%j stays inline', (input, expected) => {
+            expect(processMarkdown(input)).toBe(expected);
+        });
+
+        it.each([
+            ['# Title', '<h1>Title</h1>\n'],
+            ['#', '<h1></h1>\n'],
+            ['  # Indented', '  <h1>Indented</h1>\n'],
+            ['> quote', '<blockquote>quote</blockquote>\n'],
+            ['- item', '<li> item</li>\n'],
+            ['---', '<hr>\n'],
+            ['- [ ] todo', '<li><input type="checkbox"> todo</li>\n'],
+            ['text\n# H\nC# x\n> q', 'text<br>\n<h1>H</h1>\nC# x<br>\n<blockquote>q</blockquote>\n'],
+        ])('%j is still a block', (input, expected) => {
             expect(processMarkdown(input)).toBe(expected);
         });
     });

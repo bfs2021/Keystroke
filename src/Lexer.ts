@@ -5,6 +5,9 @@ export class Lexer {
     private position: number;      // current position in input (points to current char)
     private readPosition: number;  // current reading position in input (after current char)
     private ch: string;           // current char under examination
+    // True until the first non-space/tab token of a line. Block markers
+    // (headers, blockquotes, lists, rules, checklists) only count here.
+    private atLineStart: boolean = true;
 
     constructor(input: string) {
         this.input = input;
@@ -98,9 +101,50 @@ export class Lexer {
     }
 
     public nextToken(): Token {
+        const token = this.readToken();
+        if (token.type === TokenType.NEWLINE) {
+            this.atLineStart = true;
+        } else if (token.type !== TokenType.SPACE && token.type !== TokenType.TAB) {
+            this.atLineStart = false;
+        }
+        return token;
+    }
+
+    // Reads a run of `ch` starting at the current char, leaving the last one
+    // as the current char (readToken advances past it).
+    private readRun(ch: string): string {
+        let run = this.ch;
+        while (this.peekChar() === ch) {
+            this.readChar();
+            run += ch;
+        }
+        return run;
+    }
+
+    // True when a block-marker char should be plain text. Off line start:
+    // `C# is great`, `a > b`, `well-known`, `x - y`. At line start: `#tag`.
+    // (`*` is handled in readToken.)
+    private isMarkerAsText(): boolean {
+        if (this.atLineStart) {
+            // `#` opens a header only when followed by a space or end of line.
+            if (this.ch !== '#') return false;
+            let i = this.position;
+            while (this.input[i] === '#') i++;
+            const after = this.input[i];
+            return i - this.position > 6 || !(after === undefined || after === ' ' ||
+                after === '\t' || after === '\n' || after === '\r');
+        }
+        return this.ch === '#' || this.ch === '>' || this.ch === '-';
+    }
+
+    private readToken(): Token {
         let token = new Token(TokenType.ILLEGAL, this.ch);
 
-
+        if (this.isMarkerAsText()) {
+            token = new Token(TokenType.TEXT, this.readRun(this.ch));
+            this.readChar();
+            return token;
+        }
 
         // Handle space before the switch statement
         if (this.ch === ' ') {
@@ -144,13 +188,15 @@ export class Lexer {
                     this.readChar();
                     token = new Token(TokenType.BOLD, '**');
                 } else {
-                    // Simple heuristic: if followed by space, treat as list marker
-                    // This covers most common cases including indented lists
-                    const nextChar = this.peekChar();
-                    if (nextChar === ' ') {
+                    // At line start and followed by a space: list marker.
+                    // Mid-line with spaces on both sides (`a * b`): plain text.
+                    // Otherwise emphasis, including the closer in `*a* b`.
+                    const spaceAfter = this.peekChar() === ' ';
+                    if (this.atLineStart && spaceAfter) {
                         token = new Token(TokenType.UNORDERED_LIST, this.ch);
+                    } else if (spaceAfter && this.input[this.position - 1] === ' ') {
+                        token = new Token(TokenType.TEXT, this.ch);
                     } else {
-                        // Otherwise treat as italic
                         token = new Token(TokenType.ITALIC, this.ch);
                     }
                 }

@@ -196,11 +196,11 @@ describe('Parser', () => {
         });
 
         it('keeps the token right after a horizontal rule', () => {
-            const doc = parse('**b**---tail');
+            const doc = parse('**b**\n---tail');
             expect(doc.children.map(c => c.type)).toEqual([
-                TokenType.BOLD, TokenType.HORIZONTAL_RULE, TokenType.TEXT,
+                TokenType.BOLD, TokenType.NEWLINE, TokenType.HORIZONTAL_RULE, TokenType.TEXT,
             ]);
-            expect(doc.children[2].value).toBe('tail');
+            expect(doc.children[3].value).toBe('tail');
         });
 
         it('keeps the newline after a horizontal rule', () => {
