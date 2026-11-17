@@ -279,4 +279,50 @@ describe('Lexer', () => {
       expect(types('*a* b')[2]).toEqual([TokenType.ITALIC, '*']);
     });
   });
+
+  describe('fenced code blocks', () => {
+    function tokens(input: string): Token[] {
+      const lexer = new Lexer(input);
+      const out: Token[] = [];
+      for (let t = lexer.nextToken(); t.type !== TokenType.EOF; t = lexer.nextToken()) {
+        out.push(t);
+      }
+      return out;
+    }
+
+    it('reads a fence at line start as one CODE_BLOCK with raw content', () => {
+      const out = tokens('```\nconst a = 1;\nconst b = 2;\n```');
+      expect(out).toHaveLength(1);
+      expect(out[0].type).toBe(TokenType.CODE_BLOCK);
+      expect(out[0].literal).toBe('const a = 1;\nconst b = 2;\n');
+      expect(out[0].language).toBeUndefined();
+    });
+
+    it('captures the language and keeps markdown characters literal', () => {
+      const [block, ...rest] = tokens('```ts extra\n# *a* _b_ `c`\n```\nafter');
+      expect(block.type).toBe(TokenType.CODE_BLOCK);
+      expect(block.language).toBe('ts');
+      expect(block.literal).toBe('# *a* _b_ `c`\n');
+      // The closing fence's newline is consumed; lexing resumes at line start.
+      expect(rest.map(t => [t.type, t.literal])).toEqual([[TokenType.TEXT, 'after']]);
+    });
+
+    it('runs an unterminated fence to EOF', () => {
+      const out = tokens('```\ncode\nmore');
+      expect(out).toHaveLength(1);
+      expect(out[0].literal).toBe('code\nmore\n');
+    });
+
+    it('closes only on a fence at least as long as the opener', () => {
+      const out = tokens('````\n```\n````');
+      expect(out).toHaveLength(1);
+      expect(out[0].literal).toBe('```\n');
+    });
+
+    it('treats backticks mid-line as inline code', () => {
+      expect(tokens('a ```b```').map(t => t.type)).toEqual([
+        TokenType.TEXT, TokenType.SPACE, TokenType.INLINE_CODE, TokenType.TEXT, TokenType.INLINE_CODE,
+      ]);
+    });
+  });
 });

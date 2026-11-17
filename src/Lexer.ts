@@ -97,7 +97,9 @@ export class Lexer {
 
     public nextToken(): Token {
         const token = this.readToken();
-        if (token.type === TokenType.NEWLINE) {
+        // A code block consumes its closing fence's newline, so the next
+        // token starts a line too.
+        if (token.type === TokenType.NEWLINE || token.type === TokenType.CODE_BLOCK) {
             this.atLineStart = true;
         } else if (token.type !== TokenType.SPACE && token.type !== TokenType.TAB) {
             this.atLineStart = false;
@@ -130,6 +132,45 @@ export class Lexer {
                 after === '\t' || after === '\n' || after === '\r');
         }
         return this.ch === '#' || this.ch === '>' || this.ch === '-';
+    }
+
+    // At line start, a run of 3+ backticks opens a fenced code block. The
+    // token's literal is the raw content up to a closing fence of at least
+    // the same length (or EOF), and its language is the info string's first
+    // word. Returns null when the line isn't a fence (backticks in the info
+    // string), leaving the lexer where it was.
+    private readFencedCode(): Token | null {
+        const input = this.input;
+        let i = this.position;
+        while (input[i] === '`') i++;
+        const fenceLength = i - this.position;
+        if (fenceLength < 3) return null;
+
+        let lineEnd = input.indexOf('\n', i);
+        if (lineEnd === -1) lineEnd = input.length;
+        const info = input.slice(i, lineEnd).trim();
+        if (info.includes('`')) return null;
+
+        let content = '';
+        let pos = lineEnd + 1;
+        let resume = input.length;
+        while (pos < input.length) {
+            let end = input.indexOf('\n', pos);
+            if (end === -1) end = input.length;
+            const line = input.slice(pos, end).replace(/\r$/, '');
+            const close = /^ {0,3}(`{3,})[ \t]*$/.exec(line);
+            if (close && close[1].length >= fenceLength) {
+                resume = end + 1;
+                break;
+            }
+            content += line + '\n';
+            pos = end + 1;
+        }
+
+        this.readPosition = resume;
+        this.readChar();
+        const language = info.split(/\s+/)[0] || undefined;
+        return new Token(TokenType.CODE_BLOCK, content, language);
     }
 
     private readToken(): Token {
@@ -210,6 +251,10 @@ export class Lexer {
                 }
                 break;
             case '`':
+                if (this.atLineStart) {
+                    const fence = this.readFencedCode();
+                    if (fence) return fence;
+                }
                 let backtickCount = 1;
                 while (this.peekChar() === '`' && backtickCount < 3) {
                     this.readChar();
