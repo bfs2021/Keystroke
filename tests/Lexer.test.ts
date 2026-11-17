@@ -242,6 +242,16 @@ describe('Lexer', () => {
       expect(tokens.filter(([type]) => blockTypes.includes(type))).toEqual([]);
     });
 
+    it('keeps the x of a mid-line `- [x]` as text', () => {
+      const tokens = types('a - [x] b');
+      expect(tokens).toContainEqual([TokenType.TEXT, 'x']);
+      expect(tokens.map(([type]) => type)).not.toContain(TokenType.ILLEGAL);
+    });
+
+    it('lexes a rule of more than three dashes as one token', () => {
+      expect(types('-----')).toEqual([[TokenType.HORIZONTAL_RULE, '---']]);
+    });
+
     it('needs a space or end of line after # for a header', () => {
       expect(types('#tag')[0]).toEqual([TokenType.TEXT, '#']);
       expect(types('####### x')[0]).toEqual([TokenType.TEXT, '#######']);

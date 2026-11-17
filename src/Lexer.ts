@@ -84,11 +84,6 @@ export class Lexer {
             this.ch !== ' ' &&  // Count space as a separator
             this.ch !== '^' &&  // Add superscript separator
             this.ch !== '$' &&  // Add math separator
-            !(this.ch === 'x' &&
-              this.position > 2 &&
-              this.input[this.position - 1] === '[' &&
-              this.input[this.position - 2] === ' ' &&
-              this.input[this.position - 3] === '-') &&
             this.ch !== '-'
         ) {
             if (this.isDigit(this.ch)) {
@@ -155,14 +150,9 @@ export class Lexer {
 
         switch (this.ch) {
             case '#':
-                let hashCount = 1;
-                while (this.peekChar() === '#' && hashCount < 6) {
-                    this.readChar();
-                    hashCount++;
-                }
-
-                const headerSymbol = '#'.repeat(hashCount);
-                switch (hashCount) {
+                // isMarkerAsText already turned runs longer than 6 into text.
+                const headerSymbol = this.readRun('#');
+                switch (headerSymbol.length) {
                     case 1:
                         token = new Token(TokenType.HEADER1, headerSymbol);
                         break;
@@ -191,10 +181,12 @@ export class Lexer {
                     // At line start and followed by a space: list marker.
                     // Mid-line with spaces on both sides (`a * b`): plain text.
                     // Otherwise emphasis, including the closer in `*a* b`.
-                    const spaceAfter = this.peekChar() === ' ';
-                    if (this.atLineStart && spaceAfter) {
+                    const next = this.peekChar();
+                    const prev = this.input[this.position - 1];
+                    if (this.atLineStart && next === ' ') {
                         token = new Token(TokenType.UNORDERED_LIST, this.ch);
-                    } else if (spaceAfter && this.input[this.position - 1] === ' ') {
+                    } else if ((prev === ' ' || prev === '\t') &&
+                        (next === ' ' || next === '\t' || next === '\n' || next === '\r' || next === '\0')) {
                         token = new Token(TokenType.TEXT, this.ch);
                     } else {
                         token = new Token(TokenType.ITALIC, this.ch);
@@ -259,6 +251,7 @@ export class Lexer {
                     dashCount++;
                 }
                 if (dashCount === 3) {
+                    this.readRun('-'); // `----` and longer are one rule too
                     token = new Token(TokenType.HORIZONTAL_RULE, '---');
                 } else {
                     // Check for checkboxes after the dash

@@ -128,6 +128,9 @@ describe('Markdown Interpreter', () => {
             ['x - y', 'x - y'],
             ['a --- b', 'a --- b'],
             ['a * b', 'a * b'],
+            ['a\t* b', 'a\t* b'],
+            ['x *', 'x *'],
+            ['**b**---tail', '<b>b</b>---tail'],
             ['#hashtag', '#hashtag'],
             ['####### seven', '####### seven'],
             ['**b** - *i* and ~~s~~', '<b>b</b> - <i>i</i> and <s>s</s>'],
@@ -143,6 +146,7 @@ describe('Markdown Interpreter', () => {
             ['> quote', '<blockquote>quote</blockquote>\n'],
             ['- item', '<li> item</li>\n'],
             ['---', '<hr>\n'],
+            ['-----', '<hr>\n'],
             ['- [ ] todo', '<li><input type="checkbox"> todo</li>\n'],
             ['text\n# H\nC# x\n> q', 'text<br>\n<h1>H</h1>\nC# x<br>\n<blockquote>q</blockquote>\n'],
         ])('%j is still a block', (input, expected) => {
