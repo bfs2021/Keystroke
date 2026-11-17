@@ -149,8 +149,20 @@ export class Lexer {
             return newToken(this.tagTokenType(tagName, TokenType.TAG_OPEN), this.input.slice(position, this.readPosition));
         }
 
-        // Read until '>'
-        while (this.ch !== '>' && this.ch !== EOF_CHAR) {
+        // A '>' inside a quoted attribute value is not the end of the tag.
+        // Comments and <!...> declarations have no attributes, so they end at the first '>'.
+        const isDeclaration = this.input[position + 1] === '!';
+        let quote = '';
+        while (this.ch !== EOF_CHAR) {
+            if (isDeclaration) {
+                if (this.ch === '>') break;
+            } else if (quote !== '') {
+                if (this.ch === quote) quote = '';
+            } else if (this.ch === '"' || this.ch === "'") {
+                quote = this.ch;
+            } else if (this.ch === '>') {
+                break;
+            }
             this.readChar();
         }
 

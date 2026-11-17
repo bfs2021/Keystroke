@@ -17,6 +17,27 @@ import {
     CommentNode,
 } from './Ast';
 
+/** Commands parsed as child nodes when nested inside formatting commands. */
+const NESTED_COMMANDS: ReadonlySet<TokenType> = new Set([
+    TokenType.TEXTBF,
+    TokenType.TEXTIT,
+    TokenType.UNDERLINE,
+    TokenType.SOUT,
+    TokenType.TEXTSUPERSCRIPT,
+    TokenType.TEXTSUBSCRIPT,
+    TokenType.TEXTTT,
+    TokenType.HREF,
+]);
+
+/** Rebuilds the LaTeX source of a parsed nested command for CommandNode.value. */
+function commandSource(node: CommandNode): string {
+    if (node.type === TokenType.HREF) {
+        return '\\href{' + node.options + '}{' + node.value + '}';
+    }
+    const options = node.options !== '' ? '[' + node.options + ']' : '';
+    return node.command + options + '{' + node.value + '}';
+}
+
 export class Parser {
     private lexer: Lexer;
     private curToken: Token;
@@ -169,12 +190,20 @@ export class Parser {
             options = this.readBracketContent();
         }
 
-        // Mandatory parameter {...}
+        // Mandatory parameter {...}. \texttt keeps its content literal; the
+        // other formatting commands parse theirs so nested commands render.
+        let children: Node[] = [];
         if (this.expectPeek(TokenType.LBRACE)) {
-            value = this.readBraceContent();
+            if (commandType === TokenType.TEXTTT) {
+                value = this.readBraceContent();
+            } else {
+                ({ value, children } = this.parseBraceChildren());
+            }
         }
 
-        return new CommandNode(commandType, command, value, options);
+        const node = new CommandNode(commandType, command, value, options);
+        node.children = children;
+        return node;
     }
 
     private parseEnvironment(): Node | null {
@@ -308,11 +337,14 @@ export class Parser {
         if (this.expectPeek(TokenType.LBRACE)) {
             url = this.readBraceContent();
         }
+        let children: Node[] = [];
         if (this.expectPeek(TokenType.LBRACE)) {
-            text = this.readBraceContent();
+            ({ value: text, children } = this.parseBraceChildren());
         }
 
-        return new CommandNode(TokenType.HREF, 'href', text, url);
+        const node = new CommandNode(TokenType.HREF, 'href', text, url);
+        node.children = children;
+        return node;
     }
 
     private parseLineBreak(): Node {
@@ -359,6 +391,105 @@ export class Parser {
             case 'lstlisting': return TokenType.LSTLISTING;
             default: return TokenType.BEGIN; // Generic environment
         }
+    }
+
+    /**
+     * Parses a brace group into child nodes: nested formatting commands become
+     * CommandNodes and everything else is kept as literal text. Whitespace
+     * between tokens is kept as a single space. curToken must be LBRACE; the
+     * closing brace is left as curToken for the caller. Also returns the
+     * group's source text (whitespace collapsed) for CommandNode.value.
+     */
+    private parseBraceChildren(): { value: string; children: Node[] } {
+        const children: Node[] = [];
+        if (this.curToken.type !== TokenType.LBRACE) {
+            return { value: '', children };
+        }
+
+        let value = '';
+        let text = '';
+        let braceCount = 1;
+        let prev: Token | null = null;
+
+        this.nextToken(); // Move past opening brace
+        // Whitespace just inside the braces, as in readBraceContent. Kept in
+        // locals until the end because nested commands reset the fields.
+        const leadingSpace = this.curToken.spaceBefore && !this.curTokenIs(TokenType.RBRACE);
+        let trailingSpace = false;
+        let spaceAfterCommand = false;
+
+        while (!this.curTokenIs(TokenType.EOF)) {
+            const tok = this.curToken;
+            if (tok.type === TokenType.RBRACE && braceCount === 1) {
+                trailingSpace = tok.spaceBefore;
+                break;
+            }
+
+            if (prev !== null && tok.position > prev.position + prev.literal.length) {
+                value += ' ';
+                text += ' ';
+            }
+
+            // Whitespace just inside the previous nested command's closing brace
+            if (spaceAfterCommand && text === '') {
+                text = ' ';
+            }
+            spaceAfterCommand = false;
+
+            // Check membership first: the optional-argument lookahead scans ahead
+            const isNestedCommand = NESTED_COMMANDS.has(tok.type) && (this.peekTokenIs(TokenType.LBRACE) ||
+                (tok.type !== TokenType.HREF && this.peekIsOptionalBeforeBrace()));
+            if (isNestedCommand) {
+                const node = (tok.type === TokenType.HREF ? this.parseHref() : this.parseCommand()) as CommandNode;
+                // \textit{ b } spaces itself from its siblings, as appendElement does at top level
+                if (this.braceLeadingSpace && (text !== '' || children.length > 0) && !text.endsWith(' ')) {
+                    text += ' ';
+                }
+                if (text !== '') {
+                    children.push(new TextNode(text));
+                    text = '';
+                }
+                children.push(node);
+                value += commandSource(node);
+                spaceAfterCommand = this.braceTrailingSpace;
+            } else {
+                if (tok.type === TokenType.LBRACE) {
+                    braceCount++;
+                } else if (tok.type === TokenType.RBRACE) {
+                    braceCount--;
+                }
+                value += tok.literal;
+                text += tok.literal;
+            }
+
+            prev = this.curToken;
+            this.nextToken();
+        }
+
+        if (text !== '') {
+            children.push(new TextNode(text));
+        }
+        this.braceLeadingSpace = leadingSpace;
+        this.braceTrailingSpace = trailingSpace;
+        return { value, children };
+    }
+
+    /**
+     * True when peekToken opens an optional argument whose closing ']' is
+     * followed by a mandatory '{', as parseCommand expects. Rewinds the lexer.
+     */
+    private peekIsOptionalBeforeBrace(): boolean {
+        if (!this.peekTokenIs(TokenType.LBRACKET)) {
+            return false;
+        }
+        const state = this.lexer.saveState();
+        let tok = this.lexer.nextToken();
+        while (tok.type !== TokenType.RBRACKET && tok.type !== TokenType.RBRACE && tok.type !== TokenType.EOF) {
+            tok = this.lexer.nextToken();
+        }
+        const result = tok.type === TokenType.RBRACKET && this.lexer.nextToken().type === TokenType.LBRACE;
+        this.lexer.restoreState(state);
+        return result;
     }
 
     private readBraceContent(): string {

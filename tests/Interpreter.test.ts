@@ -75,6 +75,91 @@ describe('Markdown Interpreter', () => {
         });
     });
 
+    describe('Parentheses (#33)', () => {
+        it('should keep literal parentheses in prose', () => {
+            expect(processMarkdown('hello (world)')).toBe('hello (world)');
+        });
+
+        it('should keep unbalanced parentheses in prose', () => {
+            expect(processMarkdown('(a b')).toBe('(a b');
+            expect(processMarkdown('a b)')).toBe('a b)');
+        });
+
+        it('should keep parentheses inside headings, emphasis and quotes', () => {
+            expect(processMarkdown('# Heading (draft)')).toBe('<h1>Heading (draft)</h1>\n');
+            expect(processMarkdown('**bold (x)**')).toBe('<b>bold (x)</b>');
+            expect(processMarkdown('> quote (x)')).toBe('<blockquote>quote (x)</blockquote>\n');
+        });
+
+        it('should still use parentheses as link destinations and math content', () => {
+            expect(processMarkdown('[Example](https://example.com)')).toBe('<a href="https://example.com">Example</a>');
+            expect(processMarkdown('$f(x)$')).toBe('<span class="math">f(x)</span>');
+        });
+    });
+
+    describe('Inline content in containers (#34)', () => {
+        it('should keep inline code inside headings', () => {
+            expect(processMarkdown('# Title `code`')).toBe('<h1>Title <code>code</code></h1>\n');
+        });
+
+        it('should keep a lone $ literal and still close the container', () => {
+            expect(processMarkdown('**Price: $5** after')).toBe('<b>Price: $5</b> after');
+            expect(processMarkdown('_a $5_ b')).toBe('<i>a $5</i> b');
+            expect(processMarkdown('~~a $5~~ b')).toBe('<s>a $5</s> b');
+            expect(processMarkdown('**$5** and **$6**')).toBe('<b>$5</b> and <b>$6</b>');
+            expect(processMarkdown('# Cost $5')).toBe('<h1>Cost $5</h1>\n');
+            expect(processMarkdown('> pay $5 now')).toBe('<blockquote>pay $5 now</blockquote>\n');
+            expect(processMarkdown('- [ ] buy for $5')).toBe('<li><input type="checkbox"> buy for $5</li>\n');
+            expect(processMarkdown('# **cost $5** $x$')).toBe('<h1><b>cost $5</b> <span class="math">x</span></h1>\n');
+        });
+
+        it('should still render paired $ math inside emphasis', () => {
+            expect(processMarkdown('**a $x$ b**')).toBe('<b>a <span class="math">x</span> b</b>');
+        });
+
+        it('should keep a tab after inline content in a container', () => {
+            expect(processMarkdown('# **one**\ttwo')).toBe('<h1><b>one</b>&emsp;two</h1>\n');
+            expect(processMarkdown('> **one**\ttwo')).toBe('<blockquote><b>one</b>&emsp;two</blockquote>\n');
+        });
+
+        it('should keep inline code inside bold, italic and strikethrough', () => {
+            expect(processMarkdown('**a `b` c**')).toBe('<b>a <code>b</code> c</b>');
+            expect(processMarkdown('_a `b` c_')).toBe('<i>a <code>b</code> c</i>');
+            expect(processMarkdown('~~a `b` c~~')).toBe('<s>a <code>b</code> c</s>');
+        });
+
+        it('should keep links inside blockquotes and headings', () => {
+            expect(processMarkdown('> [link](url)')).toBe('<blockquote><a href="url">link</a></blockquote>\n');
+            expect(processMarkdown('## See [docs](https://example.com)')).toBe('<h2>See <a href="https://example.com">docs</a></h2>\n');
+        });
+
+        it('should keep math inside blockquotes and emphasis', () => {
+            expect(processMarkdown('> area $r^2$')).toBe('<blockquote>area <span class="math">r<sup>2</sup></span></blockquote>\n');
+            expect(processMarkdown('**$x^2$**')).toBe('<b><span class="math">x<sup>2</sup></span></b>');
+        });
+
+        it('should keep inline code and links inside checklist items', () => {
+            expect(processMarkdown('- [ ] run `test`')).toBe('<li><input type="checkbox"> run <code>test</code></li>\n');
+            expect(processMarkdown('- [x] read [docs](url)')).toBe('<li><input type="checkbox" checked> read <a href="url">docs</a></li>\n');
+        });
+
+        it.each(['^', '~'])('should stop an unclosed %s math group at the line boundary', marker => {
+            const tag = marker === '^' ? 'sup' : 'sub';
+            expect(processMarkdown('$x' + marker + '(2)$')).toBe('<span class="math">x<' + tag + '>(2)</' + tag + '></span>');
+            expect(processMarkdown('$x' + marker + '(\nnext')).toBe('<span class="math">x<' + tag + '>(</' + tag + '></span><br>\nnext');
+            // In a heading the unclosed $ is literal, and the next line stays outside
+            const result = processMarkdown('# $x' + marker + '(\nnext');
+            expect(result).not.toContain('class="math"');
+            expect(result.startsWith('<h1>$x')).toBe(true);
+            expect(result.endsWith('</h1>\nnext')).toBe(true);
+        });
+
+        it('should not let unterminated inline code or links swallow the next line', () => {
+            expect(processMarkdown('# a `b\nnext')).toBe('<h1>a <code>b</code></h1>\nnext');
+            expect(processMarkdown('**a [b\nnext')).toBe('<b>a <a href="">b</a></b><br>\nnext');
+        });
+    });
+
     describe('Complex Documents', () => {
         it('should process mixed content correctly', () => {
             const input = `# Title

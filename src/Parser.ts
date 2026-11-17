@@ -130,27 +130,9 @@ export class Parser {
         this.nextToken(); // Move past header token
 
         while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    header.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    header.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.BOLD:
-                    header.children.push(this.parseBold());
-                    break;
-                case TokenType.ITALIC:
-                    header.children.push(this.parseItalic());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    header.children.push(this.parseStrikethrough());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode();
+            if (node) {
+                header.children.push(node);
             }
         }
 
@@ -240,6 +222,76 @@ export class Parser {
         return text;
     }
 
+    /**
+     * Parses one inline construct inside a container (heading, blockquote,
+     * emphasis, checklist item). Leaves currentToken on the first token it did
+     * not consume. Returns null for tokens with no inline meaning, which are
+     * skipped. Callers stop on their own closing delimiter before calling this.
+     */
+    private parseInlineNode(closer: TokenType = TokenType.NEWLINE): MarkdownNode | null {
+        switch (this.currentToken.type) {
+            case TokenType.SPACE: {
+                const space = new SpaceNode(this.currentToken);
+                this.nextToken();
+                return space;
+            }
+            case TokenType.TAB: {
+                const tab = new TabNode(this.currentToken);
+                this.nextToken();
+                return tab;
+            }
+            case TokenType.TEXT:
+            case TokenType.LEFT_PARENTHESIS:
+            case TokenType.RIGHT_PARENTHESIS: {
+                const text = this.parseText();
+                this.nextToken();
+                return text;
+            }
+            case TokenType.BOLD:
+                return this.parseBold();
+            case TokenType.ITALIC:
+                return this.parseItalic();
+            case TokenType.STRIKETHROUGH:
+                return this.parseStrikethrough();
+            case TokenType.INLINE_CODE:
+                return this.parseCode();
+            case TokenType.LEFT_BRACKET:
+                return this.parseLink();
+            case TokenType.MATH: {
+                if (this.hasClosingMath(closer)) {
+                    return this.parseMath();
+                }
+                // A lone $ (e.g. a price) is literal and must not swallow the closer
+                const dollar = this.parseText();
+                this.nextToken();
+                return dollar;
+            }
+            default:
+                this.nextToken();
+                return null;
+        }
+    }
+
+    /**
+     * True when the $ at currentToken has a closing $ before the container's
+     * `closer`, the end of the line or EOF. Rewinds the lexer.
+     */
+    private hasClosingMath(closer: TokenType): boolean {
+        const ends = (tok: Token) =>
+            tok.type === closer || tok.type === TokenType.NEWLINE || tok.type === TokenType.EOF;
+        for (const tok of [this.peekToken, this.peekNextToken]) {
+            if (tok.type === TokenType.MATH) return true;
+            if (ends(tok)) return false;
+        }
+        const state = this.lexer.saveState();
+        let tok = this.lexer.nextToken();
+        while (tok.type !== TokenType.MATH && !ends(tok)) {
+            tok = this.lexer.nextToken();
+        }
+        this.lexer.restoreState(state);
+        return tok.type === TokenType.MATH;
+    }
+
     private parseBlockquote(): BlockquoteNode {
         const blockquote = new BlockquoteNode(this.currentToken, '');
         this.nextToken(); // Move past >
@@ -250,27 +302,9 @@ export class Parser {
         }
 
         while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    blockquote.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    blockquote.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.BOLD:
-                    blockquote.children.push(this.parseBold());
-                    break;
-                case TokenType.ITALIC:
-                    blockquote.children.push(this.parseItalic());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    blockquote.children.push(this.parseStrikethrough());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode();
+            if (node) {
+                blockquote.children.push(node);
             }
         }
 
@@ -289,7 +323,7 @@ export class Parser {
         const textToken = this.currentToken;
         this.nextToken(); // Move past [
 
-        while (!this.currentTokenIs(TokenType.RIGHT_BRACKET) && !this.currentTokenIs(TokenType.EOF)) {
+        while (!this.currentTokenIs(TokenType.RIGHT_BRACKET) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
             text += this.currentToken.literal;
             this.nextToken();
         }
@@ -301,7 +335,7 @@ export class Parser {
         let url = '';
         if (this.currentTokenIs(TokenType.LEFT_PARENTHESIS)) {
             this.nextToken(); // Move past (
-            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF)) {
+            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
                 url += this.currentToken.literal;
                 this.nextToken();
             }
@@ -350,24 +384,9 @@ export class Parser {
         this.nextToken(); // Move past opening **
 
         while (!this.currentTokenIs(TokenType.BOLD) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    bold.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    bold.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.ITALIC:
-                    bold.children.push(this.parseItalic());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    bold.children.push(this.parseStrikethrough());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode(TokenType.BOLD);
+            if (node) {
+                bold.children.push(node);
             }
         }
 
@@ -385,24 +404,9 @@ export class Parser {
         this.nextToken(); // Move past opening _ or *
 
         while (!this.currentTokenIs(TokenType.ITALIC) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    italic.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    italic.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.BOLD:
-                    italic.children.push(this.parseBold());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    italic.children.push(this.parseStrikethrough());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode(TokenType.ITALIC);
+            if (node) {
+                italic.children.push(node);
             }
         }
 
@@ -420,24 +424,9 @@ export class Parser {
         this.nextToken(); // Move past opening ~~
 
         while (!this.currentTokenIs(TokenType.STRIKETHROUGH) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    strikethrough.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    strikethrough.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.BOLD:
-                    strikethrough.children.push(this.parseBold());
-                    break;
-                case TokenType.ITALIC:
-                    strikethrough.children.push(this.parseItalic());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode(TokenType.STRIKETHROUGH);
+            if (node) {
+                strikethrough.children.push(node);
             }
         }
 
@@ -529,7 +518,7 @@ export class Parser {
             this.nextToken();
 
             // Collect everything until closing parenthesis
-            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF)) {
+            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
                 superscriptText += this.currentToken.literal;
                 this.nextToken();
             }
@@ -565,7 +554,7 @@ export class Parser {
             this.nextToken();
 
             // Collect everything until closing parenthesis
-            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF)) {
+            while (!this.currentTokenIs(TokenType.RIGHT_PARENTHESIS) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
                 subscriptText += this.currentToken.literal;
                 this.nextToken();
             }
@@ -626,8 +615,9 @@ export class Parser {
         }
 
         if (this.currentTokenIs(TokenType.INLINE_CODE)) {
-            this.nextToken(); // Move past closing `
+            this.nextToken(); // Consume the closing backtick
         } else {
+            // Leave a NEWLINE/EOF in place so containers stop at the end of the line
             this.addError("Unmatched ` for inline code");
         }
 
@@ -645,27 +635,9 @@ export class Parser {
         this.nextToken(); // Move past checkbox token
 
         while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    checklist.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    checklist.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.BOLD:
-                    checklist.children.push(this.parseBold());
-                    break;
-                case TokenType.ITALIC:
-                    checklist.children.push(this.parseItalic());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    checklist.children.push(this.parseStrikethrough());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode();
+            if (node) {
+                checklist.children.push(node);
             }
         }
 
@@ -677,27 +649,9 @@ export class Parser {
         this.nextToken(); // Move past checkbox token
 
         while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            switch (this.currentToken.type) {
-                case TokenType.SPACE:
-                    checklistChecked.children.push(new SpaceNode(this.currentToken));
-                    this.nextToken();
-                    break;
-                case TokenType.TEXT:
-                    checklistChecked.children.push(this.parseText());
-                    this.nextToken();
-                    break;
-                case TokenType.BOLD:
-                    checklistChecked.children.push(this.parseBold());
-                    break;
-                case TokenType.ITALIC:
-                    checklistChecked.children.push(this.parseItalic());
-                    break;
-                case TokenType.STRIKETHROUGH:
-                    checklistChecked.children.push(this.parseStrikethrough());
-                    break;
-                default:
-                    this.nextToken();
-                    break;
+            const node = this.parseInlineNode();
+            if (node) {
+                checklistChecked.children.push(node);
             }
         }
 
@@ -760,6 +714,9 @@ export class Parser {
                     consumedOwnTokens = true;
                     break;
                 case TokenType.TEXT:
+                // Parentheses outside link destinations and math are literal prose
+                case TokenType.LEFT_PARENTHESIS:
+                case TokenType.RIGHT_PARENTHESIS:
                     node = this.parseText();
                     break;
                 case TokenType.UNORDERED_LIST:
