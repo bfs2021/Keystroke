@@ -168,6 +168,26 @@ describe('Renderer', () => {
 
             expect(renderer.render(sub)).toBe('<sub>2</sub>');
         });
+
+        it('falls back to children when math, superscript and subscript have no text', () => {
+            const math = new MathNode(new Token(TokenType.MATH, '$'), '');
+            math.children.push(new TextNode(new Token(TokenType.TEXT, 'x'), 'x'));
+            const sup = new SuperscriptNode(new Token(TokenType.SUPERSCRIPT, '^'), '');
+            sup.children.push(new TextNode(new Token(TokenType.TEXT, 'a'), 'a'));
+            const sub = new SubscriptNode(new Token(TokenType.SUBSCRIPT, '~'), '');
+            sub.children.push(new TextNode(new Token(TokenType.TEXT, 'b'), 'b'));
+
+            expect(renderer.render(math)).toBe('<span class="math">x</span>');
+            expect(renderer.render(sup)).toBe('<sup>a</sup>');
+            expect(renderer.render(sub)).toBe('<sub>b</sub>');
+        });
+
+        it('renders parsed math with superscript and subscript end to end', () => {
+            const compile = (md: string) => renderer.render(new Parser(new Lexer(md)).parse());
+            expect(compile('$x^2^ + y~i~$ and H~2~O')).toBe(
+                '<span class="math">x<sup>2</sup> + y<sub>i</sub></span> and H<sub>2</sub>O'
+            );
+        });
     });
 
     describe('Other Elements', () => {

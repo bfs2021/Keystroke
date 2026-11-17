@@ -49,24 +49,6 @@ export class Lexer {
             return this.input[this.readPosition];
         }
     }
-    private skipWhitespace(): void {
-        // Only skip newlines and tabs, preserve spaces
-        while (this.ch === '\t' || this.ch === '\n' || this.ch === '\r') {
-            this.readChar();
-        }
-    }
-
-    private readIdentifier(): string {
-        const position = this.position;
-        while (this.isLetter(this.ch)) {
-            this.readChar();
-        }
-        return this.input.slice(position, this.position);
-    }
-
-    private isLetter(ch: string): boolean {
-        return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch === '_';
-    }
 
     private readNumber(): string {
         const position = this.position;

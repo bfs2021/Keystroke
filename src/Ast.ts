@@ -3,20 +3,6 @@ import { Token, TokenType } from "./Token";
 export abstract class MarkdownNode {
 	constructor(public type: TokenType, public value: string) { }
 	children: MarkdownNode[] = [];
-
-	render(): string {
-		switch (this.type) {
-			case TokenType.HEADER1:
-				return `<h1>${this.children.map(child => child.render()).join("")}</h1>`;
-			case TokenType.BOLD:
-				return `<strong>${this.children.map(child => child.render()).join("")}</strong>`;
-			case TokenType.PARAGRAPH:
-				return `<p>${this.children.map(child => child.render()).join("")}</p>`;
-			// Add cases for other node types
-			default:
-				return this.value;
-		}
-	}
 }
 
 export abstract class HeaderNode extends MarkdownNode {
@@ -273,9 +259,5 @@ export class DocumentNode extends MarkdownNode {
 	constructor(children: MarkdownNode[] = []) {
 		super(TokenType.DOCUMENT, "document");
 		this.children = children;
-	}
-
-	render(): string {
-		return this.children.map(child => child.render()).join("\n");
 	}
 }
