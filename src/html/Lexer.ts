@@ -92,67 +92,51 @@ export class Lexer {
         return this.input[this.readPosition];
     }
 
+    // Returns the next token: a tag, a text run (whitespace and all, entities
+    // decoded), or EOF. Tags without a LaTeX mapping lex as TAG_OPEN / TAG_CLOSE.
     public nextToken(): Token {
-        let tok: Token;
-
-        this.skipWhitespace();
-
-        switch (this.ch) {
-            case '<':
-                if (this.peekChar() === '/') {
-                    this.readChar();
-                    tok = this.readClosingTag();
-                } else {
-                    tok = this.readOpeningTag();
-                }
-                break;
-            case '>':
-                tok = newToken(TokenType.GT, this.ch);
-                break;
-            case '/':
-                if (this.peekChar() === '>') {
-                    this.readChar();
-                    tok = newToken(TokenType.TAG_SELF_CLOSE, '/>');
-                } else {
-                    tok = newToken(TokenType.SLASH, this.ch);
-                }
-                break;
-            case '=':
-                tok = newToken(TokenType.EQUALS, this.ch);
-                break;
-            case '"':
-                tok = newToken(TokenType.QUOTE, this.readString('"'));
-                break;
-            case "'":
-                tok = newToken(TokenType.SINGLE_QUOTE, this.readString("'"));
-                break;
-            case '\n':
-                tok = newToken(TokenType.NEWLINE, this.ch);
-                break;
-            case '\t':
-                tok = newToken(TokenType.TAB, this.ch);
-                break;
-            case ' ':
-                tok = newToken(TokenType.SPACE, this.ch);
-                break;
-            case EOF_CHAR:
-                tok = newToken(TokenType.EOF, '');
-                break;
-            default:
-                if (isLetter(this.ch)) {
-                    return newToken(TokenType.TEXT, this.readIdentifier());
-                } else if (isDigit(this.ch)) {
-                    return newToken(TokenType.TEXT, this.readNumber());
-                }
-                tok = newToken(TokenType.ILLEGAL, this.ch);
+        if (this.ch === EOF_CHAR) {
+            return newToken(TokenType.EOF, '');
         }
 
-        this.readChar();
+        if (!this.atTagStart()) {
+            return newToken(TokenType.TEXT, this.readTextRun());
+        }
+
+        let tok: Token;
+        if (this.peekChar() === '/') {
+            this.readChar();
+            tok = this.readClosingTag();
+        } else {
+            tok = this.readOpeningTag();
+        }
+        this.readChar(); // skip '>'
         return tok;
+    }
+
+    // A '<' only starts a tag when followed by a letter, '/' or '!' (comments,
+    // doctype); otherwise it is literal text, as in "1 < 2".
+    private atTagStart(): boolean {
+        if (this.ch !== '<') {
+            return false;
+        }
+        const next = this.peekChar();
+        return isLetter(next) || next === '/' || next === '!';
     }
 
     private readOpeningTag(): Token {
         const position = this.position;
+
+        // Comment: runs to "-->" (it may contain '>'); leave the final '>' for nextToken
+        if (this.input.startsWith('<!--', position)) {
+            const end = this.input.indexOf('-->', position + 2);
+            const last = end === -1 ? this.input.length : end + 2;
+            while (this.position < last && this.ch !== EOF_CHAR) {
+                this.readChar();
+            }
+            return newToken(TokenType.TAG_OPEN, this.input.slice(position, this.readPosition));
+        }
+
         this.readChar(); // skip '<'
 
         const tagName = this.readTagName();
@@ -162,7 +146,7 @@ export class Lexer {
         // Self-closing tag: leave the final '>' for nextToken to consume
         if (this.ch === '/' && this.peekChar() === '>') {
             this.readChar(); // skip '/'
-            return newToken(this.getTokenTypeFromTag(tagName), this.input.slice(position, this.readPosition));
+            return newToken(this.tagTokenType(tagName, TokenType.TAG_OPEN), this.input.slice(position, this.readPosition));
         }
 
         // Read until '>'
@@ -170,7 +154,7 @@ export class Lexer {
             this.readChar();
         }
 
-        return newToken(this.getTokenTypeFromTag(tagName), this.input.slice(position, this.readPosition));
+        return newToken(this.tagTokenType(tagName, TokenType.TAG_OPEN), this.input.slice(position, this.readPosition));
     }
 
     private readClosingTag(): Token {
@@ -185,7 +169,13 @@ export class Lexer {
             this.readChar();
         }
 
-        return newToken(this.getTokenTypeFromTag(tagName), this.input.slice(position, this.readPosition));
+        return newToken(this.tagTokenType(tagName, TokenType.TAG_CLOSE), this.input.slice(position, this.readPosition));
+    }
+
+    // Like getTokenTypeFromTag, but unknown tags get `unknown` instead of TEXT
+    private tagTokenType(tagName: string, unknown: TokenType): TokenType {
+        const type = this.getTokenTypeFromTag(tagName);
+        return type === TokenType.TEXT ? unknown : type;
     }
 
     private readTagName(): string {
@@ -207,46 +197,11 @@ export class Lexer {
         }
     }
 
-    private readIdentifier(): string {
-        const position = this.position;
-        while (isLetter(this.ch) || isDigit(this.ch) || this.ch === '_' || this.ch === '-') {
-            this.readChar();
-        }
-        return this.input.slice(position, this.position);
-    }
-
-    private readNumber(): string {
-        const position = this.position;
-        while (isDigit(this.ch)) {
-            this.readChar();
-        }
-        return this.input.slice(position, this.position);
-    }
-
-    private readString(delimiter: string): string {
-        const position = this.position + 1;
-        for (;;) {
-            this.readChar();
-            if (this.ch === delimiter || this.ch === EOF_CHAR) {
-                break;
-            }
-        }
-        return this.input.slice(position, this.position);
-    }
-
-    private readText(): string {
-        const position = this.position;
-        while (this.ch !== '<' && this.ch !== EOF_CHAR) {
-            this.readChar();
-        }
-        return trimSpace(this.input.slice(position, this.position));
-    }
-
-    // Reads content between HTML tags, decoding HTML entities
-    public readTextContent(): string {
+    // Reads text up to the next tag, decoding HTML entities and keeping whitespace
+    private readTextRun(): string {
         let result = '';
 
-        while (this.ch !== '<' && this.ch !== EOF_CHAR) {
+        while (this.ch !== EOF_CHAR && !this.atTagStart()) {
             if (this.ch === '&') {
                 result += this.readHTMLEntity();
             } else {
@@ -255,14 +210,21 @@ export class Lexer {
             }
         }
 
-        return trimSpace(result);
+        return result;
+    }
+
+    // Reads content between HTML tags, decoding HTML entities and trimming whitespace
+    public readTextContent(): string {
+        return trimSpace(this.readTextRun());
     }
 
     private readHTMLEntity(): string {
         const position = this.position;
         this.readChar(); // skip '&'
 
-        while (this.ch !== ';' && this.ch !== EOF_CHAR && this.position - position < 10) {
+        // A candidate ends at ';'; '<', '&' or whitespace means this '&' is literal
+        while (this.ch !== ';' && this.ch !== '<' && this.ch !== '&' && !/\s/.test(this.ch) &&
+            this.ch !== EOF_CHAR && this.position - position < 10) {
             this.readChar();
         }
 
