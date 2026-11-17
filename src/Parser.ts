@@ -62,6 +62,10 @@ export class Parser {
         }
     }
 
+    public getErrors(): string[] {
+        return this.errors;
+    }
+
     private nextToken(): void {
         this.currentToken = this.peekToken;
         this.peekToken = this.peekNextToken;
@@ -376,7 +380,6 @@ export class Parser {
     }
 
     private parseHorizontalRule(): HorizontalRuleNode {
-        this.expectPeek(TokenType.HORIZONTAL_RULE);
         const horizontalRule = new HorizontalRuleNode(this.currentToken);
         this.nextToken();
         return horizontalRule;
