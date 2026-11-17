@@ -382,6 +382,8 @@ export class Parser {
         return horizontalRule;
     }
 
+    // Link text and URL stop at the end of the line, so an unclosed `[`
+    // can't swallow the lines (or list items) after it.
     private parseLink(): LinkNode {
         let text = '';
         const textToken = this.currentToken;

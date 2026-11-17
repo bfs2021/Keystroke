@@ -75,6 +75,16 @@ describe('Markdown Interpreter', () => {
             expect(processMarkdown('- a\n\n- b')).toBe('<ul><li>a</li>\n</ul>\n<br>\n<ul><li>b</li>\n</ul>\n');
         });
 
+        it('keeps later items after an unclosed [ in an item', () => {
+            expect(processMarkdown('- see [note\n- next')).toBe(
+                '<ul><li>see <a href="">note</a></li>\n<li>next</li>\n</ul>\n'
+            );
+        });
+
+        it('treats - [X] as a checked box', () => {
+            expect(processMarkdown('- [X] done')).toBe('<ul><li><input type="checkbox" checked> done</li>\n</ul>\n');
+        });
+
         it('keeps the start number of an ordered list', () => {
             expect(processMarkdown('3. c\n4. d')).toBe('<ol start="3"><li>c</li>\n<li>d</li>\n</ol>\n');
         });
