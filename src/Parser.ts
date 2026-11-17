@@ -12,6 +12,7 @@ import {
     ParagraphNode,
     ListNode,
     ListItemNode,
+    ListRelatedNode,
     ChecklistNode,
     ChecklistCheckedNode,
     BlockquoteNode,
@@ -139,42 +140,105 @@ export class Parser {
         return header;
     }
 
-    private parseListItem(): ListItemNode {
-        const listItem = new ListItemNode(this.currentToken, '');
-        while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            listItem.children.push(this.parseText());
-            this.nextToken();
-        }
-        return listItem;
+    private isUnorderedMarker(t: TokenType): boolean {
+        return t === TokenType.UNORDERED_LIST || t === TokenType.LIST_ITEM ||
+            t === TokenType.CHECKLIST || t === TokenType.CHECKLIST_CHECKED;
     }
-    private parseUnorderedList(): ListNode {
-        const unorderedList = new ListNode(this.currentToken, true);
 
-        // Parse the first list item
-        unorderedList.items.push(this.parseListItem());
-        this.nextToken();
+    // Groups consecutive list lines into one list: `-`, `*` and checklist
+    // items into a <ul>, `1.` items into an <ol>. Like parseHeader, leaves
+    // currentToken on the NEWLINE (or EOF) that ends the last item.
+    private parseList(): ListNode {
+        const ordered = this.currentTokenIs(TokenType.ORDERED_LIST);
+        const sameList = (t: TokenType) =>
+            ordered ? t === TokenType.ORDERED_LIST : this.isUnorderedMarker(t);
+        const list = new ListNode(
+            new Token(ordered ? TokenType.ORDERED_LIST : TokenType.UNORDERED_LIST, this.currentToken.literal),
+            ordered
+        );
 
-        // Look for consecutive list items
-        while (this.currentTokenIs(TokenType.NEWLINE)) {
-            this.nextToken(); // Skip newline
+        list.items.push(this.parseListItem());
+        while (this.currentTokenIs(TokenType.NEWLINE) && sameList(this.peekToken.type)) {
+            this.nextToken(); // Move past the newline onto the next marker
+            list.items.push(this.parseListItem());
+        }
 
-            // Check if the next token is another list marker
-            if (this.currentTokenIs(TokenType.UNORDERED_LIST)) {
-                unorderedList.items.push(this.parseListItem());
+        return list;
+    }
+
+    private parseListItem(): ListRelatedNode {
+        const marker = this.currentToken;
+        let item: ListRelatedNode;
+        if (marker.type === TokenType.CHECKLIST) {
+            item = new ChecklistNode(marker, '');
+        } else if (marker.type === TokenType.CHECKLIST_CHECKED) {
+            item = new ChecklistCheckedNode(marker, '');
+        } else {
+            item = new ListItemNode(marker, '');
+        }
+        this.nextToken(); // Move past the marker
+
+        // The space after a checkbox stays, to separate it from the text.
+        if (item instanceof ListItemNode) {
+            while (this.isSpaceOrTab(this.currentToken)) {
                 this.nextToken();
-            } else {
-                // No more list items, break
-                break;
             }
         }
 
-        return unorderedList;
+        this.parseLineInline(item);
+        return item;
     }
-    private parseOrderedList(): ListNode {
-        const orderedList = new ListNode(this.currentToken, false);
-        orderedList.items.push(this.parseListItem());
-        this.nextToken();
-        return orderedList;
+
+    // Parses inline content into `node` up to the end of the line, leaving
+    // currentToken on the NEWLINE or EOF. Tokens with no inline meaning are
+    // kept as their literal text.
+    private parseLineInline(node: MarkdownNode): void {
+        while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
+            switch (this.currentToken.type) {
+                case TokenType.SPACE:
+                    node.children.push(new SpaceNode(this.currentToken));
+                    this.nextToken();
+                    break;
+                case TokenType.TAB:
+                    node.children.push(new TabNode(this.currentToken));
+                    this.nextToken();
+                    break;
+                case TokenType.BOLD:
+                    node.children.push(this.parseBold());
+                    break;
+                case TokenType.ITALIC:
+                    node.children.push(this.parseItalic());
+                    break;
+                case TokenType.STRIKETHROUGH:
+                    node.children.push(this.parseStrikethrough());
+                    break;
+                case TokenType.LEFT_BRACKET:
+                    node.children.push(this.parseLink());
+                    break;
+                case TokenType.INLINE_CODE:
+                    node.children.push(this.parseCode());
+                    break;
+                case TokenType.MATH:
+                    if (this.hasClosingMath(TokenType.NEWLINE)) {
+                        node.children.push(this.parseMath());
+                    } else {
+                        // A lone $ (e.g. a price) is literal, as in parseInlineNode
+                        node.children.push(this.parseText());
+                        this.nextToken();
+                    }
+                    break;
+                case TokenType.SUPERSCRIPT:
+                    node.children.push(this.parseSuperscript());
+                    break;
+                case TokenType.SUBSCRIPT:
+                    node.children.push(this.parseSubscript());
+                    break;
+                default:
+                    node.children.push(this.parseText());
+                    this.nextToken();
+                    break;
+            }
+        }
     }
 
     // private parseInlineContent(): MarkdownNode[] {
@@ -318,6 +382,8 @@ export class Parser {
         return horizontalRule;
     }
 
+    // Link text and URL stop at the end of the line, so an unclosed `[`
+    // can't swallow the lines (or list items) after it.
     private parseLink(): LinkNode {
         let text = '';
         const textToken = this.currentToken;
@@ -630,34 +696,6 @@ export class Parser {
     }
 
 
-    private parseCheckbox(): ChecklistNode {
-        const checklist = new ChecklistNode(this.currentToken, '');
-        this.nextToken(); // Move past checkbox token
-
-        while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            const node = this.parseInlineNode();
-            if (node) {
-                checklist.children.push(node);
-            }
-        }
-
-        return checklist;
-    }
-
-    private parseCheckboxChecked(): ChecklistCheckedNode {
-        const checklistChecked = new ChecklistCheckedNode(this.currentToken, '');
-        this.nextToken(); // Move past checkbox token
-
-        while (!this.currentTokenIs(TokenType.NEWLINE) && !this.currentTokenIs(TokenType.EOF)) {
-            const node = this.parseInlineNode();
-            if (node) {
-                checklistChecked.children.push(node);
-            }
-        }
-
-        return checklistChecked;
-    }
-
     private parseInlineContent(): MarkdownNode[] {
         const children: MarkdownNode[] = [];
 
@@ -720,13 +758,11 @@ export class Parser {
                     node = this.parseText();
                     break;
                 case TokenType.UNORDERED_LIST:
-                    node = this.parseUnorderedList();
-                    break;
                 case TokenType.ORDERED_LIST:
-                    node = this.parseOrderedList();
-                    break;
                 case TokenType.LIST_ITEM:
-                    node = this.parseListItem();
+                case TokenType.CHECKLIST:
+                case TokenType.CHECKLIST_CHECKED:
+                    node = this.parseList();
                     break;
                 case TokenType.SPACE:
                     node = new SpaceNode(this.currentToken);
@@ -736,12 +772,6 @@ export class Parser {
                     break;
                 case TokenType.NEWLINE:
                     node = new NewlineNode(this.currentToken);
-                    break;
-                case TokenType.CHECKLIST:
-                    node = this.parseCheckbox();
-                    break;
-                case TokenType.CHECKLIST_CHECKED:
-                    node = this.parseCheckboxChecked();
                     break;
                 case TokenType.BOLD:
                     node = this.parseBold();

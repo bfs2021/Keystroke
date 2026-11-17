@@ -1,5 +1,8 @@
 import { Token, TokenType } from "./Token";
 
+// 1-9 digits and a dot, then a space, tab, or end of line.
+const ORDERED_MARKER = /\d{1,9}\.(?=[ \t\r\n]|$)/y;
+
 export class Lexer {
     private input: string;
     private position: number;      // current position in input (points to current char)
@@ -75,6 +78,10 @@ export class Lexer {
 
     private isDigit(ch: string): boolean {
         return '0' <= ch && ch <= '9';
+    }
+
+    private isBlankOrEnd(ch: string): boolean {
+        return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\0';
     }
 
     private readText(): string {
@@ -207,6 +214,17 @@ export class Lexer {
             return token;
         }
 
+        // `1. ` at line start: ordered list marker.
+        if (this.atLineStart && this.isDigit(this.ch)) {
+            ORDERED_MARKER.lastIndex = this.position;
+            const marker = ORDERED_MARKER.exec(this.input);
+            if (marker) {
+                this.readPosition = this.position + marker[0].length;
+                this.readChar();
+                return new Token(TokenType.ORDERED_LIST, marker[0]);
+            }
+        }
+
         switch (this.ch) {
             case '#':
                 // isMarkerAsText already turned runs longer than 6 into text.
@@ -316,38 +334,28 @@ export class Lexer {
                 if (dashCount === 3) {
                     this.readRun('-'); // `----` and longer are one rule too
                     token = new Token(TokenType.HORIZONTAL_RULE, '---');
+                } else if (dashCount === 2 || !this.isBlankOrEnd(this.peekChar())) {
+                    // `-5`, `--x`: not a list marker.
+                    token = new Token(TokenType.TEXT, '-'.repeat(dashCount));
                 } else {
-                    // Check for checkboxes after the dash
-                    if (this.peekChar() === ' ') {
-                        this.readChar(); // consume space
-                        if (this.peekChar() === '[') {
-                            this.readChar(); // consume [
-                            const nextChar = this.peekChar();
-                            if (nextChar === ' ' || nextChar === 'x') {
-                                this.readChar(); // consume space or x
-                                if (this.peekChar() === ']') {
-                                    this.readChar(); // consume ]
-                                    token = new Token(
-                                        nextChar === 'x' ? TokenType.CHECKLIST_CHECKED : TokenType.CHECKLIST,
-                                        nextChar === 'x' ? '- [x]' : '- [ ]'
-                                    );
-                                    break;
-                                }
-                            }
-                        }
+                    // `- [ ]` / `- [x]` is a checklist marker. Look ahead
+                    // without consuming so `- [link](url)` keeps its `[`.
+                    const box = this.input.slice(this.readPosition, this.readPosition + 4);
+                    // The box must be followed by whitespace or end of line,
+                    // so `- [x](url)` stays a link.
+                    const afterBox = this.input[this.readPosition + 4] ?? '\0';
+                    const checked = box === ' [x]' || box === ' [X]';
+                    if ((checked || box === ' [ ]') && this.isBlankOrEnd(afterBox)) {
+                        this.readPosition += 3;
+                        this.readChar(); // now on `]`
+                        token = checked
+                            ? new Token(TokenType.CHECKLIST_CHECKED, '- [x]')
+                            : new Token(TokenType.CHECKLIST, '- [ ]');
+                    } else {
+                        token = new Token(TokenType.LIST_ITEM, '-');
                     }
-                    token = new Token(TokenType.LIST_ITEM, this.ch);
-                    break;
                 }
                 break;
-            // case '1':
-            //     if (this.peekChar() === '.') {
-            //         if (this.peekChar() === ' ') {
-            //             this.readChar();
-            //             token = new Token(TokenType.ORDERED_LIST, '1.');
-            //         }
-            //     }
-            //     break;
             case '\n':
                 token = new Token(TokenType.NEWLINE, this.ch);
                 break;
