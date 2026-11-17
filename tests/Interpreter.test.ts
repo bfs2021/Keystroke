@@ -109,6 +109,8 @@ describe('Markdown Interpreter', () => {
             ['x^2 outside math', 'x<sup>2</sup> outside math'],
             ['y~1 outside math', 'y<sub>1</sub> outside math'],
             ['H~2~O', 'H<sub>2</sub>O'],
+            ['**b**---tail', '<b>b</b><hr>\ntail'],
+            ['---tail', '<hr>\ntail'],
             ['x^2^ y', 'x<sup>2</sup> y'],
             ['x^2^.', 'x<sup>2</sup>.'],
             ['$x^2^ + y~1~$', '<span class="math">x<sup>2</sup> + y<sub>1</sub></span>'],

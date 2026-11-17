@@ -765,6 +765,7 @@ export class Parser {
                     break;
                 case TokenType.HORIZONTAL_RULE:
                     node = this.parseHorizontalRule();
+                    consumedOwnTokens = true;
                     break;
                 case TokenType.TEXT:
                     node = this.parseText();
