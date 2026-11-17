@@ -81,6 +81,13 @@ describe('Markdown Interpreter', () => {
             );
         });
 
+        it.each([
+            ['- x^(a\n- next', '<ul><li>x<sup>(a</sup></li>\n<li>next</li>\n</ul>\n'],
+            ['- x~(a\n- next', '<ul><li>x<sub>(a</sub></li>\n<li>next</li>\n</ul>\n'],
+        ])('keeps later items after an unclosed ( in %j', (input, expected) => {
+            expect(processMarkdown(input)).toBe(expected);
+        });
+
         it('treats - [X] as a checked box', () => {
             expect(processMarkdown('- [X] done')).toBe('<ul><li><input type="checkbox" checked> done</li>\n</ul>\n');
         });
