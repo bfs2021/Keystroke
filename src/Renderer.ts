@@ -1,5 +1,9 @@
-import { MarkdownNode, LinkNode, ChecklistCheckedNode } from './Ast';
+import { MarkdownNode, LinkNode, ChecklistCheckedNode, CodeBlockNode } from './Ast';
 import { TokenType } from './Token';
+
+function escapeHtml(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 export class Renderer {
     render(node: MarkdownNode): string {
@@ -28,8 +32,12 @@ export class Renderer {
                 return "";
             case TokenType.INLINE_CODE:
                 return `<code>${this.renderChildren(node)}</code>`;
-            case TokenType.CODE_BLOCK:
-                return `<pre><code>${this.renderChildren(node)}</code></pre>\n`;
+            case TokenType.CODE_BLOCK: {
+                // Code is shown verbatim: escaped, never parsed as markdown.
+                const block = node as CodeBlockNode;
+                const cls = block.language ? ` class="language-${escapeHtml(block.language)}"` : '';
+                return `<pre><code${cls}>${escapeHtml(block.code)}</code></pre>\n`;
+            }
             case TokenType.LINK:
                 const linkNode = node as LinkNode;
                 return `<a href="${linkNode.url}">${linkNode.text}</a>`;

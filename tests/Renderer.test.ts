@@ -1,3 +1,5 @@
+import { Lexer } from '../src/Lexer';
+import { Parser } from '../src/Parser';
 import { Renderer } from '../src/Renderer';
 import { Token, TokenType } from '../src/Token';
 import {
@@ -97,6 +99,48 @@ describe('Renderer', () => {
             code.children.push(new TextNode(new Token(TokenType.TEXT, 'console.log()'), 'console.log()'));
 
             expect(renderer.render(code)).toBe('<code>console.log()</code>');
+        });
+
+        it('should render a code block with a language, escaped', () => {
+            const block = new CodeBlockNode(new Token(TokenType.CODE_BLOCK, ''), 'a < b && c > d\n', 'js');
+            expect(renderer.render(block)).toBe(
+                '<pre><code class="language-js">a &lt; b &amp;&amp; c &gt; d\n</code></pre>\n'
+            );
+        });
+
+        it('should render a code block without a language', () => {
+            const block = new CodeBlockNode(new Token(TokenType.CODE_BLOCK, ''), 'x\n');
+            expect(renderer.render(block)).toBe('<pre><code>x\n</code></pre>\n');
+        });
+
+        describe('end to end', () => {
+            const compile = (md: string) => renderer.render(new Parser(new Lexer(md)).parse());
+
+            it('renders inline code', () => {
+                expect(compile('Use `a_b` here')).toBe('Use <code>a_b</code> here');
+            });
+
+            it('renders the fenced block from issue #22 verbatim', () => {
+                expect(compile('```\nconst a = 1;\nconst b = 2;\n```')).toBe(
+                    '<pre><code>const a = 1;\nconst b = 2;\n</code></pre>\n'
+                );
+            });
+
+            it('renders a fence with a language', () => {
+                expect(compile('```typescript\nlet x: number = 1;\n```\n# After')).toBe(
+                    '<pre><code class="language-typescript">let x: number = 1;\n</code></pre>\n<h1>After</h1>\n'
+                );
+            });
+
+            it('renders an unterminated fence to the end of input', () => {
+                expect(compile('```\nlet y = 2;')).toBe('<pre><code>let y = 2;\n</code></pre>\n');
+            });
+
+            it('leaves markdown inside a fence literal', () => {
+                expect(compile('```\n# not a header\n**not bold** _x_ [a](b) <tag>\n```')).toBe(
+                    '<pre><code># not a header\n**not bold** _x_ [a](b) &lt;tag&gt;\n</code></pre>\n'
+                );
+            });
         });
     });
 

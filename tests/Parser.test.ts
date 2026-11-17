@@ -15,6 +15,7 @@ import {
     MathNode,
     SuperscriptNode,
     SubscriptNode,
+    CodeBlockNode,
 } from '../src/Ast';
 
 describe('Parser', () => {
@@ -249,6 +250,38 @@ describe('Parser', () => {
                 TokenType.TEXT, TokenType.SUBSCRIPT, TokenType.SPACE, TokenType.TEXT,
             ]);
             expect(doc.children[3].value).toBe('a');
+        });
+    });
+
+    describe('Code', () => {
+        function parseWithErrors(input: string): [DocumentNode, string[]] {
+            const parser = new Parser(new Lexer(input));
+            const doc = parser.parse();
+            return [doc, (parser as unknown as { errors: string[] }).errors];
+        }
+
+        it('parses inline code without errors', () => {
+            const [doc, errors] = parseWithErrors('Use `a_b` here');
+            expect(errors).toEqual([]);
+            expect(doc.children.map(c => c.type)).toEqual([
+                TokenType.TEXT, TokenType.SPACE, TokenType.INLINE_CODE, TokenType.SPACE, TokenType.TEXT,
+            ]);
+        });
+
+        it('parses a fenced code block into a CodeBlockNode', () => {
+            const [doc, errors] = parseWithErrors('```python\nprint(1)\n```\nafter');
+            expect(errors).toEqual([]);
+            expect(doc.children.map(c => c.type)).toEqual([TokenType.CODE_BLOCK, TokenType.TEXT]);
+            const block = doc.children[0] as CodeBlockNode;
+            expect(block).toBeInstanceOf(CodeBlockNode);
+            expect(block.code).toBe('print(1)\n');
+            expect(block.language).toBe('python');
+        });
+
+        it('terminates on an unterminated fence', () => {
+            const [doc] = parseWithErrors('```\nnever closed');
+            expect(doc.children.map(c => c.type)).toEqual([TokenType.CODE_BLOCK]);
+            expect((doc.children[0] as CodeBlockNode).code).toBe('never closed\n');
         });
     });
 });

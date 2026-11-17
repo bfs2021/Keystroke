@@ -65,7 +65,9 @@ export enum TokenType {
 export class Token {
     constructor(
         public type: TokenType,
-        public literal: string
+        public literal: string,
+        // CODE_BLOCK only: the fence's language (first word of its info string).
+        public language?: string
     ) {}
 }
 

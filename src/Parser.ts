@@ -615,10 +615,9 @@ export class Parser {
     }
 
     private parseCode(): InlineCodeNode {
-        this.expectPeek(TokenType.INLINE_CODE);
         const code = new InlineCodeNode(this.currentToken, '');
 
-        // Consume the opening **
+        // Consume the opening `
         this.nextToken();
 
         while (!this.currentTokenIs(TokenType.INLINE_CODE) && !this.currentTokenIs(TokenType.EOF) && !this.currentTokenIs(TokenType.NEWLINE)) {
@@ -635,16 +634,9 @@ export class Parser {
         return code;
     }
 
+    // The lexer reads the whole fence (content and language) into one token.
     private parseCodeBlock(): CodeBlockNode {
-        this.expectPeek(TokenType.CODE_BLOCK);
-        let text = '';
-        while (!this.peekTokenIs(TokenType.CODE_BLOCK)) {
-            text += this.parseText().value;
-            this.nextToken();
-        }
-        const codeBlock = new CodeBlockNode(this.currentToken, text);
-        this.nextToken();
-        return codeBlock;
+        return new CodeBlockNode(this.currentToken, this.currentToken.literal, this.currentToken.language);
     }
 
 
@@ -813,6 +805,9 @@ export class Parser {
                 case TokenType.INLINE_CODE:
                     node = this.parseCode();
                     consumedOwnTokens = true;
+                    break;
+                case TokenType.CODE_BLOCK:
+                    node = this.parseCodeBlock();
                     break;
                 case TokenType.MATH:
                     node = this.parseMath();
