@@ -88,6 +88,16 @@ describe('Markdown Interpreter', () => {
             expect(processMarkdown(input)).toBe(expected);
         });
 
+        it.each([
+            ['- [x](https://example.com)', '<ul><li><a href="https://example.com">x</a></li>\n</ul>\n'],
+            ['- [ ](u) gap', '<ul><li><a href="u"> </a> gap</li>\n</ul>\n'],
+            ['- [x] Done', '<ul><li><input type="checkbox" checked> Done</li>\n</ul>\n'],
+            ['- [x]', '<ul><li><input type="checkbox" checked></li>\n</ul>\n'],
+            ['- [ ]\n- b', '<ul><li><input type="checkbox"></li>\n<li>b</li>\n</ul>\n'],
+        ])('%j needs whitespace or end of line after ] to be a checkbox', (input, expected) => {
+            expect(processMarkdown(input)).toBe(expected);
+        });
+
         it('treats - [X] as a checked box', () => {
             expect(processMarkdown('- [X] done')).toBe('<ul><li><input type="checkbox" checked> done</li>\n</ul>\n');
         });

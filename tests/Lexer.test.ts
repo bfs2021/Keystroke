@@ -277,6 +277,8 @@ describe('Lexer', () => {
       expect(types('-5')[0]).toEqual([TokenType.TEXT, '-']);
       expect(types('-- x')[0]).toEqual([TokenType.TEXT, '--']);
       expect(types('-')[0]).toEqual([TokenType.LIST_ITEM, '-']);
+      expect(types('- [x](u)')[0]).toEqual([TokenType.LIST_ITEM, '-']);
+      expect(types('- [x]\tz')[0]).toEqual([TokenType.CHECKLIST_CHECKED, '- [x]']);
       // A `[` that isn't a checkbox stays a token for the link parser.
       expect(types('- [a](b)').slice(0, 3)).toEqual([
         [TokenType.LIST_ITEM, '-'], [TokenType.SPACE, ' '], [TokenType.LEFT_BRACKET, '['],

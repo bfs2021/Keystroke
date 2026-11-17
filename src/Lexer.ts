@@ -341,8 +341,11 @@ export class Lexer {
                     // `- [ ]` / `- [x]` is a checklist marker. Look ahead
                     // without consuming so `- [link](url)` keeps its `[`.
                     const box = this.input.slice(this.readPosition, this.readPosition + 4);
+                    // The box must be followed by whitespace or end of line,
+                    // so `- [x](url)` stays a link.
+                    const afterBox = this.input[this.readPosition + 4] ?? '\0';
                     const checked = box === ' [x]' || box === ' [X]';
-                    if (checked || box === ' [ ]') {
+                    if ((checked || box === ' [ ]') && this.isBlankOrEnd(afterBox)) {
                         this.readPosition += 3;
                         this.readChar(); // now on `]`
                         token = checked
