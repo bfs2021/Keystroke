@@ -134,13 +134,19 @@ export class Lexer {
         return this.ch === '#' || this.ch === '>' || this.ch === '-';
     }
 
-    // At line start, a run of 3+ backticks opens a fenced code block. The
-    // token's literal is the raw content up to a closing fence of at least
-    // the same length (or EOF), and its language is the info string's first
-    // word. Returns null when the line isn't a fence (backticks in the info
-    // string), leaving the lexer where it was.
+    // At line start, a run of 3+ backticks indented 0-3 spaces opens a fenced
+    // code block. The token's literal is the raw content up to a closing fence
+    // of at least the same length (or EOF), with up to the opener's indent
+    // removed from each line, and its language is the info string's first
+    // word. Returns null when the line isn't a fence (deeper or tab indent,
+    // backticks in the info string), leaving the lexer where it was.
     private readFencedCode(): Token | null {
         const input = this.input;
+        const lineStart = input.lastIndexOf('\n', this.position - 1) + 1;
+        const indent = this.position - lineStart;
+        if (indent > 3 || !/^ *$/.test(input.slice(lineStart, this.position))) return null;
+        const dedent = new RegExp(`^ {0,${indent}}`);
+
         let i = this.position;
         while (input[i] === '`') i++;
         const fenceLength = i - this.position;
@@ -163,7 +169,7 @@ export class Lexer {
                 resume = end + 1;
                 break;
             }
-            content += line + '\n';
+            content += line.replace(dedent, '') + '\n';
             pos = end + 1;
         }
 

@@ -1,9 +1,9 @@
 import { MarkdownNode, LinkNode, ChecklistCheckedNode, CodeBlockNode } from './Ast';
+import { TokenType } from './Token';
 
 function escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-import { TokenType } from './Token';
 
 export class Renderer {
     render(node: MarkdownNode): string {

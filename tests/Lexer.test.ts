@@ -319,6 +319,16 @@ describe('Lexer', () => {
       expect(out[0].literal).toBe('```\n');
     });
 
+    it('strips the opener indent from content lines', () => {
+      const out = tokens('  ```\n    a\n b\n  ```');
+      expect(out.map(t => t.type)).toEqual([TokenType.SPACE, TokenType.SPACE, TokenType.CODE_BLOCK]);
+      expect(out[2].literal).toBe('  a\nb\n');
+    });
+
+    it('does not open a fence indented 4 or more spaces', () => {
+      expect(tokens('    ```\nx').some(t => t.type === TokenType.CODE_BLOCK)).toBe(false);
+    });
+
     it('treats backticks mid-line as inline code', () => {
       expect(tokens('a ```b```').map(t => t.type)).toEqual([
         TokenType.TEXT, TokenType.SPACE, TokenType.INLINE_CODE, TokenType.TEXT, TokenType.INLINE_CODE,

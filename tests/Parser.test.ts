@@ -256,7 +256,8 @@ describe('Parser', () => {
     describe('Code', () => {
         function parseWithErrors(input: string): [DocumentNode, string[]] {
             const parser = new Parser(new Lexer(input));
-            return [parser.parse(), parser.getErrors()];
+            const doc = parser.parse();
+            return [doc, (parser as unknown as { errors: string[] }).errors];
         }
 
         it('parses inline code without errors', () => {

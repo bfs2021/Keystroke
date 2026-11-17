@@ -93,10 +93,6 @@ export class Parser {
     private addError(msg: string): void {
         this.errors.push(msg);
     }
-
-    public getErrors(): string[] {
-        return this.errors;
-    }
     private peekError(t: TokenType): void {
         if (this.peekTokenIs(t)) {
             this.addError(`expected next token to be ${t}, got ${this.peekToken.type} instead`);
