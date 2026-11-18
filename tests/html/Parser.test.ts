@@ -283,6 +283,16 @@ describe('html Parser', () => {
     expect((doc.children[0] as PreNode).language).toBe('go');
   });
 
+  it('extracts the language when the class list has several classes', () => {
+    const { doc } = parse('<pre class="highlight language-python">print(1)</pre>');
+    expect((doc.children[0] as PreNode).language).toBe('python');
+  });
+
+  it('extracts the language from the first language-prefixed class', () => {
+    const { doc } = parse('<pre class="language-go language-python">code</pre>');
+    expect((doc.children[0] as PreNode).language).toBe('go');
+  });
+
   it.each([
     ['language-go', 'go'],
     ['language-python', 'python'],

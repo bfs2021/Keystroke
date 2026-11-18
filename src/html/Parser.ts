@@ -396,10 +396,12 @@ export class Parser {
     }
 
     private extractLanguageFromClass(): string {
-        // Extract language from class attribute like class="language-go"
-        const cls = this.extractAttribute("class");
-        if (cls.startsWith("language-")) {
-            return cls.slice("language-".length);
+        // Extract language from a whitespace-separated class list, e.g.
+        // class="highlight language-python".
+        for (const cls of this.extractAttribute("class").split(HTML_WHITESPACE)) {
+            if (cls.startsWith("language-")) {
+                return cls.slice("language-".length);
+            }
         }
         return "";
     }
